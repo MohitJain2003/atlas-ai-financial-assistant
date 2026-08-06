@@ -1,11 +1,13 @@
 """
 Background Jobs Scheduler — Morning briefings, evening summaries, price alerts,
-proactive news monitoring, and earnings calendar notifications.
+proactive news monitoring, earnings calendar notifications, and self-ping keep-alive.
 """
+import os
 import logging
 from datetime import datetime, date, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from telegram import Bot
+import httpx
 
 from app.config import settings
 from app.database.repositories import UserRepository, AlertRepository
@@ -241,6 +243,20 @@ async def send_earnings_reminders():
         except Exception as e:
             logger.error(f"Earnings reminder error for {user.telegram_id}: {e}")
 
+async def self_ping_keepalive():
+    """Ping our own /health endpoint every 10 min — backup keep-alive for Render.com."""
+    port = os.getenv("PORT", "8000")
+    url = os.getenv("RENDER_EXTERNAL_URL", f"http://localhost:{port}")
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{url}/health")
+            if resp.status_code == 200:
+                logger.debug(f"✅ Self-ping OK: {url}/health")
+            else:
+                logger.warning(f"⚠️ Self-ping returned {resp.status_code}")
+    except Exception as e:
+        logger.debug(f"Self-ping skipped (local mode): {e}")
+
 
 def start_scheduler():
     """Start all background jobs."""
@@ -262,8 +278,12 @@ def start_scheduler():
     # Earnings reminder — every hour (only actually sends at 7 AM)
     scheduler.add_job(send_earnings_reminders, "cron", minute=5, id="earnings_reminders", replace_existing=True)
 
+    # Self-ping keep-alive — every 10 minutes (backup for UptimeRobot on Render)
+    scheduler.add_job(self_ping_keepalive, "interval", minutes=10, id="self_ping", replace_existing=True)
+
     scheduler.start()
     logger.info(
         "⏱️ Scheduler started: Morning Briefings + Evening Summaries + "
-        "Price Alerts (15min) + News Monitor (2hr) + Earnings Reminders (7AM)"
+        "Price Alerts (15min) + News Monitor (2hr) + Earnings Reminders (7AM) + "
+        "Self-Ping Keep-Alive (10min)"
     )
