@@ -158,9 +158,32 @@ class AIEngine:
     async def process_message(self, user: User, message: str, message_type: str = "text") -> str:
         """Process a user message and return a personalized AI response."""
         if not user.is_onboarded:
-            response = await self._handle_onboarding(user, message)
+            # If user asks a real financial/market question during onboarding,
+            # complete onboarding silently and answer their question directly.
+            # Don't make them wait — feel like an analyst, not a form.
+            financial_keywords = [
+                "price", "stock", "market", "share", "crypto", "bitcoin",
+                "invest", "earn", "revenue", "chart", "analysis", "buy", "sell",
+                "news", "company", "ticker", "s&p", "nasdaq", "dow", "portfolio",
+                "pe ratio", "market cap", "ipo", "dividend", "sec", "filing",
+                "analyst", "insider", "earnings", "fomc", "cpi", "gdp", "nfp",
+                "what is", "how is", "tell me about", "show me", "what's",
+            ]
+            msg_lower = message.lower()
+            is_financial_query = any(kw in msg_lower for kw in financial_keywords)
+
+            if is_financial_query and user.onboarding_step not in ("welcome", None):
+                # Silently mark onboarding complete and answer the question
+                await UserRepository.update_user(
+                    user.telegram_id, is_onboarded=True, onboarding_step="complete"
+                )
+                user.is_onboarded = True
+                response = await self._handle_conversation(user, message)
+            else:
+                response = await self._handle_onboarding(user, message)
         else:
             response = await self._handle_conversation(user, message)
+
 
         await self.memory.save_interaction(
             telegram_id=user.telegram_id,
