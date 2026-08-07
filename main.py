@@ -75,7 +75,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "build": "v3.2-fix-redirect-uri-mismatch"}
+    return {"status": "healthy", "build": "v3.3-fix-token-exchange"}
 
 
 @app.get("/debug/price/{ticker}")

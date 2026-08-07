@@ -58,7 +58,7 @@ async def google_auth_callback(request: Request, code: str = None, state: str = 
 
     try:
         telegram_id = int(state)
-        token_data = exchange_code_for_tokens(code, state)
+        token_data = exchange_code_for_tokens(code, state, authorization_response=str(request.url))
 
         if not token_data:
             raise ValueError("Token exchange returned empty result")

@@ -19,6 +19,10 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
 ]
 
+import os
+os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+
 def get_redirect_uri() -> str:
     """Dynamically get the authoritative redirect URI for Google OAuth."""
     env_uri = os.getenv("GOOGLE_REDIRECT_URI")
@@ -69,7 +73,7 @@ def get_auth_url(telegram_id: int) -> str:
     return auth_url
 
 
-def exchange_code_for_tokens(code: str, state: str) -> Optional[Dict]:
+def exchange_code_for_tokens(code: str, state: str, authorization_response: Optional[str] = None) -> Optional[Dict]:
     """Exchange authorization code for access and refresh tokens."""
     try:
         from google_auth_oauthlib.flow import Flow
@@ -88,7 +92,14 @@ def exchange_code_for_tokens(code: str, state: str) -> Optional[Dict]:
 
         flow = Flow.from_client_config(client_config, scopes=SCOPES, state=state)
         flow.redirect_uri = redirect_uri
-        flow.fetch_token(code=code)
+
+        if authorization_response:
+            # Fix http -> https header issue behind Render reverse proxy
+            if authorization_response.startswith("http://") and "localhost" not in authorization_response:
+                authorization_response = authorization_response.replace("http://", "https://", 1)
+            flow.fetch_token(authorization_response=authorization_response)
+        else:
+            flow.fetch_token(code=code)
 
         creds = flow.credentials
         return {
@@ -101,7 +112,7 @@ def exchange_code_for_tokens(code: str, state: str) -> Optional[Dict]:
             "expiry": creds.expiry.isoformat() if creds.expiry else None,
         }
     except Exception as e:
-        logger.error(f"Token exchange failed: {e}")
+        logger.error(f"Token exchange failed: {type(e).__name__}: {e}", exc_info=True)
         return None
 
 
