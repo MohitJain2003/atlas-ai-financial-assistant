@@ -193,7 +193,8 @@ class AIEngine:
         msg_lower = message.lower()
 
         # Global intercept: Google OAuth connect intent
-        if any(kw in msg_lower for kw in ["connect google", "link google", "google account", "connect gmail", "connect calendar", "connect my google"]):
+        is_google_connect = ("google" in msg_lower and any(kw in msg_lower for kw in ["connect", "link", "login", "auth", "sync", "account", "gmail", "calendar"])) or any(kw in msg_lower for kw in ["connect gmail", "connect calendar", "connect google"])
+        if is_google_connect:
             from app.integrations.google_services import is_google_configured
             if not is_google_configured():
                 return (
