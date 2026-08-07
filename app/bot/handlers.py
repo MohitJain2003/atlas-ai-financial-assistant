@@ -39,18 +39,35 @@ async def _send(context, chat_id: int, text: str):
     # Remove markdown headers (# Title → Title)
     text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
 
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    # Detect Google Auth URL in text and add a clean clickable button
+    reply_markup = None
+    auth_match = re.search(r'(https?://[^\s\)]+/auth/google\?telegram_id=\d+)', text)
+    if auth_match:
+        auth_url = auth_match.group(1)
+        keyboard = [[InlineKeyboardButton("🔑 Connect to Google", url=auth_url)]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
     chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
-    for chunk in chunks:
+    for idx, chunk in enumerate(chunks):
+        # Attach button to final chunk
+        chunk_markup = reply_markup if idx == len(chunks) - 1 else None
         try:
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=chunk,
                 parse_mode=ParseMode.MARKDOWN,
+                reply_markup=chunk_markup,
             )
         except Exception:
             # Fallback: strip all markdown symbols and send plain text
             plain = re.sub(r'[*_`\[\]]', '', chunk)
-            await context.bot.send_message(chat_id=chat_id, text=plain)
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=plain,
+                reply_markup=chunk_markup,
+            )
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
