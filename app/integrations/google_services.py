@@ -6,8 +6,9 @@ Tokens are stored per-user in the database (JSON column).
 import logging
 import json
 import os
-from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
+import urllib.parse
+from typing import Optional, Dict, Any, List, Tuple
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,6 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
 ]
 
-import os
 os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
@@ -46,31 +46,21 @@ def is_google_configured() -> bool:
 
 
 def get_auth_url(telegram_id: int) -> str:
-    """Generate Google OAuth authorization URL for this user."""
-    from google_auth_oauthlib.flow import Flow
-    client_id, client_secret = get_google_credentials()
+    """Generate Google OAuth authorization URL for this user (standard web flow without PKCE requirement)."""
+    client_id, _ = get_google_credentials()
     redirect_uri = get_redirect_uri()
 
-    client_config = {
-        "web": {
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "redirect_uris": [redirect_uri],
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-        }
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": " ".join(SCOPES),
+        "access_type": "offline",
+        "include_granted_scopes": "true",
+        "state": str(telegram_id),
+        "prompt": "consent",
     }
-
-    flow = Flow.from_client_config(client_config, scopes=SCOPES)
-    flow.redirect_uri = redirect_uri
-
-    auth_url, _ = flow.authorization_url(
-        access_type="offline",
-        include_granted_scopes="true",
-        state=str(telegram_id),
-        prompt="consent",
-    )
-    return auth_url
+    return f"https://accounts.google.com/o/oauth2/auth?{urllib.parse.urlencode(params)}"
 
 
 async def exchange_code_for_tokens_async(code: str, state: str = None, authorization_response: Optional[str] = None) -> Tuple[Optional[Dict], str]:
