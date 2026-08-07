@@ -386,11 +386,13 @@ class AIEngine:
         # Build the user message — inject live data directly so AI cannot ignore it
         if pre_fetched:
             user_message = (
-                f"{message}\n\n"
-                f"[REAL-TIME DATA FROM YAHOO FINANCE — USE THESE EXACT NUMBERS ONLY. "
-                f"DO NOT use your training data for prices. DO NOT round or estimate:\n"
-                f"{pre_fetched}\n"
-                f"Always cite 'per Yahoo Finance' when referencing these numbers.]"
+                f"MANDATORY INSTRUCTION: The following contains VERIFIED REAL-TIME market data. "
+                f"You MUST use ONLY these exact numbers in your response. "
+                f"DO NOT call any tools. DO NOT use your training data for prices.\n\n"
+                f"User question: {message}\n\n"
+                f"VERIFIED LIVE DATA (source: Finnhub/Alpha Vantage API, fetched just now):\n"
+                f"{pre_fetched}\n\n"
+                f"Respond using ONLY the data above. Cite the source."
             )
         else:
             user_message = message
@@ -401,16 +403,18 @@ class AIEngine:
                 "\n\n[SYSTEM RULE: User is FULLY ONBOARDED. "
                 "NEVER ask about their role, sectors, watchlist, briefing time, "
                 "or any notification delivery method. "
-                "Just answer the question and stop.]"
+                "Just answer the question directly.]"
             )
 
         async def _tool_handler(tool_name: str, tool_args: dict) -> dict:
             return await handle_tool_call(tool_name, tool_args, user=user)
 
+        # When we already have pre-fetched data, don't pass tools — forces AI to use injected data
+        # Otherwise Gemini calls get_stock_price tool itself and may ignore pre-fetched data
         response = await model_chain.generate(
             system_prompt=system_prompt,
             user_message=user_message,
-            tool_handler=_tool_handler,
+            tool_handler=_tool_handler if not pre_fetched else None,
         )
 
         await self._check_for_watchlist_updates(user, message)
