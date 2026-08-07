@@ -373,29 +373,12 @@ class AIEngine:
         user_context = await self.memory.get_user_context(user)
         conv_history = await self.memory.get_context(user.telegram_id, limit=15)
 
-        # ── Pre-fetch live data ──────────────────────────────────────────────
-        # Injected into USER MESSAGE (not system prompt) — LLMs prioritize user message
-        # over system prompt. This guarantees AI uses real numbers, not training memory.
-        pre_fetched = await self._pre_fetch_market_data(message)
-
         system_prompt = SYSTEM_PROMPT.format(
             user_context=user_context,
             conversation_history=conv_history,
         )
 
-        # Build the user message — inject live data directly so AI cannot ignore it
-        if pre_fetched:
-            user_message = (
-                f"MANDATORY INSTRUCTION: The following contains VERIFIED REAL-TIME market data. "
-                f"You MUST use ONLY these exact numbers in your response. "
-                f"DO NOT call any tools. DO NOT use your training data for prices.\n\n"
-                f"User question: {message}\n\n"
-                f"VERIFIED LIVE DATA (source: Finnhub/Alpha Vantage API, fetched just now):\n"
-                f"{pre_fetched}\n\n"
-                f"Respond using ONLY the data above. Cite the source."
-            )
-        else:
-            user_message = message
+        user_message = message
 
         # Onboarding guard — prevent AI from asking setup questions after onboarding
         if user.is_onboarded:
@@ -409,13 +392,68 @@ class AIEngine:
         async def _tool_handler(tool_name: str, tool_args: dict) -> dict:
             return await handle_tool_call(tool_name, tool_args, user=user)
 
-        # When we already have pre-fetched data, don't pass tools — forces AI to use injected data
-        # Otherwise Gemini calls get_stock_price tool itself and may ignore pre-fetched data
+        # Let AI call tools directly — Gemini will call get_stock_price via Finnhub
         response = await model_chain.generate(
             system_prompt=system_prompt,
             user_message=user_message,
-            tool_handler=_tool_handler if not pre_fetched else None,
+            tool_handler=_tool_handler,
         )
+
+        # ── Safety net: if AI hallucinated a price, force-correct it ──
+        # Check if this was a price query but the AI didn't use real data
+        msg_lower = message.lower()
+        price_keywords = ["price", "stock", "trading", "share", "worth", "how much", "what's", "what is"]
+        is_price_query = any(kw in msg_lower for kw in price_keywords)
+
+        if is_price_query and not any(src in response.lower() for src in ["finnhub", "alpha vantage", "yahoo finance", "per "]):
+            # AI likely hallucinated — fetch real data and re-generate
+            market_service, _, _, _, _, _ = _get_services()
+            company_map = {
+                "apple": "AAPL", "microsoft": "MSFT", "google": "GOOGL", "alphabet": "GOOGL",
+                "amazon": "AMZN", "tesla": "TSLA", "nvidia": "NVDA", "meta": "META",
+                "netflix": "NFLX", "uber": "UBER", "reliance": "RELIANCE.NS",
+                "tata": "TCS.NS", "infosys": "INFY.NS", "tcs": "TCS.NS",
+                "hdfc": "HDFCBANK.NS", "sbi": "SBIN.NS",
+            }
+            ticker = None
+            for name, t in company_map.items():
+                if name in msg_lower:
+                    ticker = t
+                    break
+            if not ticker:
+                ticker_match = re.search(r'\b([A-Z]{2,5})\b', message)
+                if ticker_match:
+                    ticker = ticker_match.group(1)
+
+            if ticker:
+                try:
+                    data = await market_service.get_stock_price(ticker)
+                    if "error" not in data:
+                        # Re-generate with forced real data
+                        forced_message = (
+                            f"User asked: {message}\n\n"
+                            f"HERE IS THE REAL-TIME DATA — use ONLY these numbers:\n"
+                            f"Ticker: {data.get('ticker')} | Price: ${data.get('price')} | "
+                            f"Change: {data.get('change')} ({data.get('percent_change')}%) | "
+                            f"Open: ${data.get('open', 'N/A')} | High: ${data.get('high', 'N/A')} | "
+                            f"Low: ${data.get('low', 'N/A')} | "
+                            f"52W High: ${data.get('week_52_high', 'N/A')} | "
+                            f"52W Low: ${data.get('week_52_low', 'N/A')} | "
+                            f"Source: {data.get('source', 'Finnhub')}\n\n"
+                            f"Format a concise response with these exact numbers. Cite the source."
+                        )
+                        if user.is_onboarded:
+                            forced_message += (
+                                "\n\n[SYSTEM RULE: User is FULLY ONBOARDED. "
+                                "Do NOT ask any onboarding or setup questions.]"
+                            )
+                        response = await model_chain.generate(
+                            system_prompt=system_prompt,
+                            user_message=forced_message,
+                            tool_handler=None,  # No tools — just format the data
+                        )
+                except Exception as e:
+                    logger.warning(f"Safety net re-fetch failed: {e}")
 
         await self._check_for_watchlist_updates(user, message)
         return response
