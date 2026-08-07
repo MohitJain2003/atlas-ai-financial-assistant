@@ -303,6 +303,19 @@ async def check_event_reminders():
             logger.error(f"Event reminder error for {reminder.telegram_id}: {e}")
 
 
+async def self_ping_keepalive():
+    """Ping our own /health endpoint every 10 min to prevent Render free tier spin-down."""
+    service_url = os.getenv("RENDER_EXTERNAL_URL", "")
+    if not service_url:
+        return  # Not on Render, skip
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{service_url}/health")
+            logger.debug(f"Keep-alive ping: {resp.status_code}")
+    except Exception as e:
+        logger.debug(f"Keep-alive ping failed (non-critical): {e}")
+
+
 def start_scheduler():
     """Start all background jobs."""
     if scheduler.running:
