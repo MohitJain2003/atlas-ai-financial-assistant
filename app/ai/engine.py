@@ -373,12 +373,24 @@ class AIEngine:
         user_context = await self.memory.get_user_context(user)
         conv_history = await self.memory.get_context(user.telegram_id, limit=15)
 
+        # Pre-fetch live market data for price/comparison/market queries
+        # Injected directly into user_message so ALL models (Gemini, Groq, SambaNova, etc.)
+        # get real-time Finnhub/Alpha Vantage data even if function calling fails/rate-limits.
+        pre_fetched = await self._pre_fetch_market_data(message)
+
         system_prompt = SYSTEM_PROMPT.format(
             user_context=user_context,
             conversation_history=conv_history,
         )
 
         user_message = message
+        if pre_fetched:
+            user_message += (
+                f"\n\n[REAL-TIME MARKET DATA — FETCHED LIVE FROM FINNHUB / ALPHA VANTAGE API:\n"
+                f"{pre_fetched}\n"
+                f"INSTRUCTION: You MUST use these exact real-time numbers in your response. "
+                f"Cite the data source. DO NOT use internal training memory for prices.]"
+            )
 
         # Onboarding guard — prevent AI from asking setup questions after onboarding
         if user.is_onboarded:
@@ -392,7 +404,6 @@ class AIEngine:
         async def _tool_handler(tool_name: str, tool_args: dict) -> dict:
             return await handle_tool_call(tool_name, tool_args, user=user)
 
-        # Let AI call tools directly — Gemini will call get_stock_price via Finnhub
         response = await model_chain.generate(
             system_prompt=system_prompt,
             user_message=user_message,
@@ -496,11 +507,12 @@ class AIEngine:
                     data = await market_service.get_stock_price(ticker_to_fetch)
                     if "error" not in data:
                         results.append(
-                            f"Stock: {ticker_to_fetch} | Price: ${data.get('price', 'N/A')} | "
-                            f"Change: {data.get('change_percent', 'N/A')}% | "
-                            f"Volume: {data.get('volume', 'N/A')} | "
-                            f"52W High: {data.get('week_52_high', 'N/A')} | "
-                            f"52W Low: {data.get('week_52_low', 'N/A')}"
+                            f"Stock: {ticker_to_fetch} ({data.get('company_name', ticker_to_fetch)}) | "
+                            f"Price: ${data.get('price', 'N/A')} | "
+                            f"Change: ${data.get('change', 0)} ({data.get('percent_change', 0)}%) | "
+                            f"Open: ${data.get('open', 'N/A')} | High: ${data.get('high', 'N/A')} | Low: ${data.get('low', 'N/A')} | "
+                            f"52W High: ${data.get('week_52_high', 'N/A')} | 52W Low: ${data.get('week_52_low', 'N/A')} | "
+                            f"Source: {data.get('source', 'Finnhub API')}"
                         )
                 except Exception:
                     pass
