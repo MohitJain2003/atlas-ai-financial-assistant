@@ -237,6 +237,7 @@ class AIEngine:
     async def _handle_onboarding(self, user: User, message: str) -> str:
         """Drive conversational onboarding — one step at a time."""
         history = await self.memory.get_context(user.telegram_id, limit=10)
+        pre_fetched = await self._pre_fetch_market_data(message)
 
         prompt = ONBOARDING_PROMPT.format(
             onboarding_step=user.onboarding_step,
@@ -245,7 +246,18 @@ class AIEngine:
             user_message=message,
         )
 
-        response = await model_chain.generate(prompt, message)
+        user_msg = message
+        if pre_fetched:
+            user_msg += (
+                f"\n\n[REAL-TIME MARKET DATA — FETCHED LIVE FROM FINNHUB API:\n"
+                f"{pre_fetched}\n"
+                f"INSTRUCTION: Use these exact real-time numbers in your response. Cite the source.]"
+            )
+
+        async def _tool_handler(tool_name: str, tool_args: dict) -> dict:
+            return await handle_tool_call(tool_name, tool_args, user=user)
+
+        response = await model_chain.generate(prompt, user_msg, tool_handler=_tool_handler)
         await self._process_onboarding_step(user, message)
         return response
 
