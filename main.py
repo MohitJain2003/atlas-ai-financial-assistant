@@ -78,6 +78,15 @@ async def health_check():
     return {"status": "healthy", "build": "785ae7d-price-fix"}
 
 
+@app.get("/debug/price/{ticker}")
+async def debug_price(ticker: str):
+    """Debug endpoint — test if financial APIs work on Render."""
+    from app.services.market_data import MarketDataService
+    svc = MarketDataService()
+    result = await svc.get_stock_price(ticker.upper())
+    return {"ticker": ticker.upper(), "result": result, "finnhub_key_set": bool(svc.finnhub_key), "alphavantage_key_set": bool(svc.alphavantage_key)}
+
+
 if __name__ == "__main__":
     import uvicorn
     import os
