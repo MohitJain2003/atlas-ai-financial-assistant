@@ -41,13 +41,17 @@ async def _send(context, chat_id: int, text: str):
 
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-    # Detect Google Auth URL in text and add a clean clickable button
+    # Detect Google Auth URL in text, extract URL, and attach clean InlineKeyboardButton
     reply_markup = None
-    auth_match = re.search(r'(https?://[^\s\)]+/auth/google\?telegram_id=\d+)', text)
+    auth_match = re.search(r'\[AUTH_LINK:(https?://[^\s\]]+)\]', text) or re.search(r'(https?://[^\s\)]+/auth/google\?telegram_id=\d+)', text)
     if auth_match:
         auth_url = auth_match.group(1)
         keyboard = [[InlineKeyboardButton("🔑 Connect to Google", url=auth_url)]]
         reply_markup = InlineKeyboardMarkup(keyboard)
+        # Strip out raw URL placeholder or link strings from body text
+        text = re.sub(r'\[AUTH_LINK:.*?\]', '', text)
+        text = re.sub(r'https?://[^\s\)]+/auth/google\?telegram_id=\d+', '', text)
+        text = text.strip()
 
     chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
     for idx, chunk in enumerate(chunks):

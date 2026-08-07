@@ -208,12 +208,9 @@ class AIEngine:
             base_url = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
             auth_link = f"{base_url}/auth/google?telegram_id={user.telegram_id}"
             return (
-                f"🔗 *Connect your Google Account*\n\n"
-                f"Click this link to authorize Atlas:\n{auth_link}\n\n"
-                f"Once connected, I can access your:\n"
-                f"📅 *Google Calendar* — view & create events\n"
-                f"📧 *Gmail* — search emails about companies\n"
-                f"📊 *Google Sheets* — analyze spreadsheets"
+                f"🔗 *Connect Google Account*\n\n"
+                f"Authorize Atlas to access your **Google Calendar**, **Gmail**, and **Sheets**.\n\n"
+                f"[AUTH_LINK:{auth_link}]"
             )
 
         # Global intercept: Calendar/Gmail queries when not connected
@@ -223,9 +220,8 @@ class AIEngine:
             auth_link = f"{base_url}/auth/google?telegram_id={user.telegram_id}"
             return (
                 f"📅 *Google Account Not Connected*\n\n"
-                f"To check your calendar or search your emails, please link your Google account first:\n\n"
-                f"🔗 [Click here to Connect Google]({auth_link})\n\n"
-                f"Once authorized, I can view your schedule, search emails, and update spreadsheets directly!"
+                f"Please authorize your Google account below to access Calendar & Gmail.\n\n"
+                f"[AUTH_LINK:{auth_link}]"
             )
 
         if not user.is_onboarded:
