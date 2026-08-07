@@ -19,7 +19,13 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
 ]
 
-REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/google/callback")
+def get_redirect_uri() -> str:
+    """Dynamically get the authoritative redirect URI for Google OAuth."""
+    env_uri = os.getenv("GOOGLE_REDIRECT_URI")
+    if env_uri and "localhost" not in env_uri:
+        return env_uri
+    base_url = os.getenv("RENDER_EXTERNAL_URL", "https://atlas-ai-financial-assistant-f2m5.onrender.com")
+    return f"{base_url}/auth/google/callback"
 
 
 def get_google_credentials():
@@ -39,19 +45,20 @@ def get_auth_url(telegram_id: int) -> str:
     """Generate Google OAuth authorization URL for this user."""
     from google_auth_oauthlib.flow import Flow
     client_id, client_secret = get_google_credentials()
+    redirect_uri = get_redirect_uri()
 
     client_config = {
         "web": {
             "client_id": client_id,
             "client_secret": client_secret,
-            "redirect_uris": [REDIRECT_URI],
+            "redirect_uris": [redirect_uri],
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
         }
     }
 
     flow = Flow.from_client_config(client_config, scopes=SCOPES)
-    flow.redirect_uri = REDIRECT_URI
+    flow.redirect_uri = redirect_uri
 
     auth_url, _ = flow.authorization_url(
         access_type="offline",
@@ -63,23 +70,24 @@ def get_auth_url(telegram_id: int) -> str:
 
 
 def exchange_code_for_tokens(code: str, state: str) -> Optional[Dict]:
-    """Exchange OAuth code for access + refresh tokens."""
+    """Exchange authorization code for access and refresh tokens."""
     try:
         from google_auth_oauthlib.flow import Flow
         client_id, client_secret = get_google_credentials()
+        redirect_uri = get_redirect_uri()
 
         client_config = {
             "web": {
                 "client_id": client_id,
                 "client_secret": client_secret,
-                "redirect_uris": [REDIRECT_URI],
+                "redirect_uris": [redirect_uri],
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                 "token_uri": "https://oauth2.googleapis.com/token",
             }
         }
 
         flow = Flow.from_client_config(client_config, scopes=SCOPES, state=state)
-        flow.redirect_uri = REDIRECT_URI
+        flow.redirect_uri = redirect_uri
         flow.fetch_token(code=code)
 
         creds = flow.credentials
