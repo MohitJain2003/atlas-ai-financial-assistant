@@ -73,14 +73,15 @@ def get_auth_url(telegram_id: int) -> str:
     return auth_url
 
 
-async def exchange_code_for_tokens_async(code: str, state: str = None, authorization_response: Optional[str] = None) -> Optional[Dict]:
+async def exchange_code_for_tokens_async(code: str, state: str = None, authorization_response: Optional[str] = None) -> Tuple[Optional[Dict], str]:
     """Exchange authorization code for access and refresh tokens via direct HTTP POST."""
     client_id, client_secret = get_google_credentials()
     redirect_uri = get_redirect_uri()
 
     if not client_id or not client_secret:
-        logger.error("Google OAuth credentials missing in environment variables.")
-        return None
+        msg = f"Google OAuth credentials missing on Render environment (client_id={bool(client_id)}, client_secret={bool(client_secret)})"
+        logger.error(msg)
+        return None, msg
 
     try:
         import httpx
@@ -109,14 +110,15 @@ async def exchange_code_for_tokens_async(code: str, state: str = None, authoriza
                 "expiry": expiry_dt.isoformat(),
             }
             logger.info(f"Google OAuth token exchange SUCCESS for user state={state}")
-            return token_data
+            return token_data, ""
         else:
-            logger.error(f"Google OAuth token exchange HTTP error {res.status_code}: {res.text}")
+            msg = f"Google Token API returned HTTP {res.status_code}: {res.text} [redirect_uri={redirect_uri}]"
+            logger.error(msg)
+            return None, msg
     except Exception as e:
-        logger.error(f"Google OAuth token exchange exception: {type(e).__name__}: {e}", exc_info=True)
-
-    # Fallback to sync method if async fails
-    return exchange_code_for_tokens(code, state, authorization_response)
+        msg = f"Token exchange exception ({type(e).__name__}): {e}"
+        logger.error(msg, exc_info=True)
+        return None, msg
 
 
 def exchange_code_for_tokens(code: str, state: str, authorization_response: Optional[str] = None) -> Optional[Dict]:
