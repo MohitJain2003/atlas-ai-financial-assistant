@@ -1,16 +1,21 @@
 """
-Database Connection - Async SQLite with SQLAlchemy
+Database Connection - Async SQLite (local) or PostgreSQL (Render) with SQLAlchemy
 """
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
-# Create async engine
+db_url = settings.DATABASE_URL
+_is_sqlite = db_url.startswith("sqlite")
+
+# SQLite needs check_same_thread=False; PostgreSQL uses pool_pre_ping for health checks
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    db_url,
     echo=False,
     future=True,
+    connect_args={"check_same_thread": False} if _is_sqlite else {},
+    pool_pre_ping=not _is_sqlite,
 )
 
 # Session factory
