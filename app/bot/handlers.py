@@ -257,3 +257,10 @@ def register_handlers(app: Application):
     app.add_handler(MessageHandler(filters.Document.ALL, document_handler))
     app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
     logger.info("✅ All Telegram handlers registered")
+
+
+def create_bot_app() -> Application:
+    """Build and return the Telegram Application with all handlers registered."""
+    app = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
+    register_handlers(app)
+    return app

@@ -194,16 +194,22 @@ class AIEngine:
             # If user asks a real financial/market question during onboarding,
             # complete onboarding silently and answer their question directly.
             # Don't make them wait — feel like an analyst, not a form.
-            financial_keywords = [
-                "price", "stock", "market", "share", "crypto", "bitcoin",
-                "invest", "earn", "revenue", "chart", "analysis", "buy", "sell",
-                "news", "company", "ticker", "s&p", "nasdaq", "dow", "portfolio",
-                "pe ratio", "market cap", "ipo", "dividend", "sec", "filing",
-                "analyst", "insider", "earnings", "fomc", "cpi", "gdp", "nfp",
-                "what is", "how is", "tell me about", "show me", "what's",
+            # Use word-boundary matching to avoid "investor" matching "invest"
+            financial_patterns = [
+                r"\bprice\b", r"\bstock\b", r"\bmarket\b", r"\bshare\b",
+                r"\bcrypto\b", r"\bbitcoin\b", r"\bportfolio\b", r"\brevenue\b",
+                r"\bchart\b", r"\bbuy\b", r"\bsell\b", r"\bnews\b",
+                r"\bticker\b", r"\bnasdaq\b", r"\bdow\b", r"\bipo\b",
+                r"\bdividend\b", r"\bearnings\b", r"\bfomc\b", r"\bcpi\b",
+                r"\bgdp\b", r"\banalyst\b", r"\binsider\b", r"\bfiling\b",
+                r"\bsec\b", r"what'?s\s+\w+\s+stock", r"how is the market",
+                r"tell me about \w+", r"show me \w+", r"\btrading at\b",
+                r"\bmarket cap\b", r"\bpe ratio\b", r"\bshare price\b",
             ]
             msg_lower = message.lower()
-            is_financial_query = any(kw in msg_lower for kw in financial_keywords)
+            is_financial_query = any(
+                re.search(p, msg_lower) for p in financial_patterns
+            )
 
             if is_financial_query and user.onboarding_step not in ("welcome", None):
                 # Silently mark onboarding complete and answer the question
