@@ -373,8 +373,9 @@ class AIEngine:
         user_context = await self.memory.get_user_context(user)
         conv_history = await self.memory.get_context(user.telegram_id, limit=15)
 
-        # ── Pre-fetch live data for common query types ──────────────────────
-        # This guarantees real numbers are always in context — AI can NEVER hallucinate prices
+        # ── Pre-fetch live data ──────────────────────────────────────────────
+        # Injected into USER MESSAGE (not system prompt) — LLMs prioritize user message
+        # over system prompt. This guarantees AI uses real numbers, not training memory.
         pre_fetched = await self._pre_fetch_market_data(message)
 
         system_prompt = SYSTEM_PROMPT.format(
@@ -382,15 +383,33 @@ class AIEngine:
             conversation_history=conv_history,
         )
 
+        # Build the user message — inject live data directly so AI cannot ignore it
         if pre_fetched:
-            system_prompt += f"\n\n## LIVE DATA ALREADY FETCHED (use this, do NOT make up numbers)\n{pre_fetched}"
+            user_message = (
+                f"{message}\n\n"
+                f"[REAL-TIME DATA FROM YAHOO FINANCE — USE THESE EXACT NUMBERS ONLY. "
+                f"DO NOT use your training data for prices. DO NOT round or estimate:\n"
+                f"{pre_fetched}\n"
+                f"Always cite 'per Yahoo Finance' when referencing these numbers.]"
+            )
+        else:
+            user_message = message
+
+        # Onboarding guard — prevent AI from asking setup questions after onboarding
+        if user.is_onboarded:
+            user_message += (
+                "\n\n[SYSTEM RULE: User is FULLY ONBOARDED. "
+                "NEVER ask about their role, sectors, watchlist, briefing time, "
+                "or any notification delivery method. "
+                "Just answer the question and stop.]"
+            )
 
         async def _tool_handler(tool_name: str, tool_args: dict) -> dict:
             return await handle_tool_call(tool_name, tool_args, user=user)
 
         response = await model_chain.generate(
             system_prompt=system_prompt,
-            user_message=message,
+            user_message=user_message,
             tool_handler=_tool_handler,
         )
 
