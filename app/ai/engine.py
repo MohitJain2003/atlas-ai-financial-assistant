@@ -367,10 +367,17 @@ class AIEngine:
         user_context = await self.memory.get_user_context(user)
         conv_history = await self.memory.get_context(user.telegram_id, limit=15)
 
+        # ── Pre-fetch live data for common query types ──────────────────────
+        # This guarantees real numbers are always in context — AI can NEVER hallucinate prices
+        pre_fetched = await self._pre_fetch_market_data(message)
+
         system_prompt = SYSTEM_PROMPT.format(
             user_context=user_context,
             conversation_history=conv_history,
         )
+
+        if pre_fetched:
+            system_prompt += f"\n\n## LIVE DATA ALREADY FETCHED (use this, do NOT make up numbers)\n{pre_fetched}"
 
         async def _tool_handler(tool_name: str, tool_args: dict) -> dict:
             return await handle_tool_call(tool_name, tool_args, user=user)
@@ -383,6 +390,66 @@ class AIEngine:
 
         await self._check_for_watchlist_updates(user, message)
         return response
+
+    async def _pre_fetch_market_data(self, message: str) -> str:
+        """Pre-fetch live data for price/market queries so AI always has real numbers."""
+        msg_lower = message.lower()
+        results = []
+        market_service, news_service, _, _, _, _ = _get_services()
+
+        # Detect stock price queries
+        price_keywords = ["price", "trading", "stock", "share", "worth", "value", "how much", "what is", "what's"]
+        is_price_query = any(kw in msg_lower for kw in price_keywords)
+
+        if is_price_query:
+            # Known company → ticker mapping
+            company_map = {
+                "apple": "AAPL", "microsoft": "MSFT", "google": "GOOGL", "alphabet": "GOOGL",
+                "amazon": "AMZN", "tesla": "TSLA", "nvidia": "NVDA", "meta": "META",
+                "netflix": "NFLX", "uber": "UBER", "twitter": "TWTR", "x corp": "TWTR",
+                "reliance": "RELIANCE.NS", "reliance industries": "RELIANCE.NS",
+                "tata": "TCS.NS", "infosys": "INFY.NS", "wipro": "WIPRO.NS",
+                "tcs": "TCS.NS", "hdfc": "HDFCBANK.NS", "sbi": "SBIN.NS",
+                "samsung": "005930.KS", "alibaba": "BABA", "baidu": "BIDU",
+            }
+            ticker_to_fetch = None
+            for name, ticker in company_map.items():
+                if name in msg_lower:
+                    ticker_to_fetch = ticker
+                    break
+
+            # Also check for direct tickers (e.g. AAPL, TSLA)
+            if not ticker_to_fetch:
+                ticker_match = re.search(r'\b([A-Z]{2,5})\b', message)
+                if ticker_match:
+                    ticker_to_fetch = ticker_match.group(1)
+
+            if ticker_to_fetch:
+                try:
+                    data = await market_service.get_stock_price(ticker_to_fetch)
+                    if "error" not in data:
+                        results.append(
+                            f"Stock: {ticker_to_fetch} | Price: ${data.get('price', 'N/A')} | "
+                            f"Change: {data.get('change_percent', 'N/A')}% | "
+                            f"Volume: {data.get('volume', 'N/A')} | "
+                            f"52W High: {data.get('week_52_high', 'N/A')} | "
+                            f"52W Low: {data.get('week_52_low', 'N/A')}"
+                        )
+                except Exception:
+                    pass
+
+        # Detect market overview queries
+        market_keywords = ["market", "s&p", "nasdaq", "dow", "indices", "index", "nifty", "sensex"]
+        if any(kw in msg_lower for kw in market_keywords) and "price" not in msg_lower:
+            try:
+                overview = await market_service.get_market_overview()
+                if overview and "error" not in overview:
+                    results.append(f"Market Overview: {json.dumps(overview)}")
+            except Exception:
+                pass
+
+        return "\n".join(results) if results else ""
+
 
     async def _check_for_watchlist_updates(self, user: User, message: str):
         """Auto-update watchlist when user mentions tracking or removing stocks."""

@@ -23,7 +23,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /start — initiate conversational onboarding for new users."""
+    """/start — welcome new users OR greet returning users without resetting their profile."""
     tg_user = update.effective_user
     chat_id = update.effective_chat.id
 
@@ -37,8 +37,20 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             username=tg_user.username,
         )
 
-        welcome_text = f"Hello {tg_user.first_name}! I'm Atlas." if not user.is_onboarded else "Hi"
-        response = await ai_engine.process_message(user, welcome_text)
+        if user.is_onboarded:
+            # Returning user — don't restart onboarding, just greet them
+            name = tg_user.first_name or "there"
+            response = await ai_engine.process_message(
+                user,
+                f"[SYSTEM: Returning user {name} just opened the bot with /start. "
+                f"Greet them warmly in 1-2 sentences, remind them what you can do, "
+                f"and ask what they'd like to know today. Do NOT ask about their role or restart onboarding.]"
+            )
+        else:
+            # New user — start onboarding
+            welcome_text = f"Hello {tg_user.first_name or 'there'}! I'm Atlas."
+            response = await ai_engine.process_message(user, welcome_text)
+
         await context.bot.send_message(chat_id=chat_id, text=response)
 
     except Exception as e:
@@ -51,6 +63,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "or send a voice note / PDF document for analysis."
             )
         )
+
 
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
