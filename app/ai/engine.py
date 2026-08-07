@@ -495,12 +495,19 @@ class AIEngine:
             # Known company → ticker mapping
             company_map = {
                 "apple": "AAPL", "microsoft": "MSFT", "google": "GOOGL", "alphabet": "GOOGL",
-                "amazon": "AMZN", "tesla": "TSLA", "nvidia": "NVDA", "meta": "META",
-                "netflix": "NFLX", "uber": "UBER", "twitter": "TWTR", "x corp": "TWTR",
-                "reliance": "RELIANCE.NS", "reliance industries": "RELIANCE.NS",
-                "tata": "TCS.NS", "infosys": "INFY.NS", "wipro": "WIPRO.NS",
-                "tcs": "TCS.NS", "hdfc": "HDFCBANK.NS", "sbi": "SBIN.NS",
-                "samsung": "005930.KS", "alibaba": "BABA", "baidu": "BIDU",
+                "amazon": "AMZN", "tesla": "TSLA", "nvidia": "NVDA", "meta": "META", "facebook": "META",
+                "netflix": "NFLX", "uber": "UBER", "lyft": "LYFT", "airbnb": "ABNB",
+                "palantir": "PLTR", "amd": "AMD", "intel": "INTC", "disney": "DIS",
+                "spotify": "SPOT", "coinbase": "COIN", "robinhood": "HOOD", "snowflake": "SNOW",
+                "shopify": "SHOP", "square": "SQ", "block": "SQ", "paypal": "PYPL",
+                "jpmorgan": "JPM", "goldman": "GS", "berkshire": "BRK-B", "bank of america": "BAC",
+                "boeing": "BA", "walmart": "WMT", "costco": "COST", "nike": "NKE",
+                "starbucks": "SBUX", "mcdonalds": "MCD", "mcdonald": "MCD", "visa": "V",
+                "mastercard": "MA", "salesforce": "CRM", "oracle": "ORCL", "adobe": "ADBE",
+                "ibm": "IBM", "sony": "SONY", "broadcom": "AVGO", "qualcomm": "QCOM",
+                "reliance": "RELIANCE.NS", "tata": "TCS.NS", "infosys": "INFY.NS",
+                "wipro": "WIPRO.NS", "tcs": "TCS.NS", "hdfc": "HDFCBANK.NS", "sbi": "SBIN.NS",
+                "icici": "ICICIBANK.NS", "samsung": "005930.KS", "alibaba": "BABA", "baidu": "BIDU",
             }
             ticker_to_fetch = None
             for name, ticker in company_map.items():
@@ -508,11 +515,14 @@ class AIEngine:
                     ticker_to_fetch = ticker
                     break
 
-            # Also check for direct tickers (e.g. AAPL, TSLA)
+            # Also check for direct tickers (e.g. AAPL, TSLA, PLTR, NVDA, MSFT)
             if not ticker_to_fetch:
-                ticker_match = re.search(r'\b([A-Z]{2,5})\b', message)
-                if ticker_match:
-                    ticker_to_fetch = ticker_match.group(1)
+                words = re.findall(r'\b([A-Za-z]{2,5})\b', message)
+                ignore = {"WHAT", "WHATS", "STOCK", "PRICE", "HOW", "MUCH", "SHOW", "TELL", "SHARE", "ABOUT", "GIVE", "TODAY", "YOUR", "THIS"}
+                for w in words:
+                    if w.upper() not in ignore:
+                        ticker_to_fetch = w.upper()
+                        break
 
             if ticker_to_fetch:
                 try:
