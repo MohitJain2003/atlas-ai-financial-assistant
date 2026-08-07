@@ -75,7 +75,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy", "build": "785ae7d-price-fix"}
 
 
 if __name__ == "__main__":

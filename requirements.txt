@@ -12,7 +12,6 @@ openai==1.51.0
 # Database
 sqlalchemy==2.0.35
 aiosqlite==0.20.0
-psycopg[binary]
 greenlet
 
 # Financial Data
