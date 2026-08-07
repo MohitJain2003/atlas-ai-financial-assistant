@@ -1,6 +1,6 @@
 """
 Telegram Bot Message & Document Handlers — Natural conversational interface.
-Handles: text, voice notes, documents (PDF/DOCX), and photos/images.
+Handles: text, voice notes, documents (PDF/DOCX/XLSX), and photos/images.
 No slash commands, menus, or buttons — pure conversation.
 """
 import os
@@ -9,6 +9,7 @@ from telegram import Update
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters, ContextTypes
 )
+from telegram.constants import ParseMode
 
 from app.config import settings
 from app.database.repositories import UserRepository, DocumentRepository
@@ -20,6 +21,24 @@ logger = logging.getLogger(__name__)
 # Ensure upload directory exists
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+async def _send(context, chat_id: int, text: str):
+    """Send a message with Markdown formatting, fallback to plain text on parse error."""
+    # Telegram Markdown: *bold*, _italic_, `code`, [link](url)
+    # Split if over 4000 chars
+    chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
+    for chunk in chunks:
+        try:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=chunk,
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        except Exception:
+            # Fallback: strip markdown symbols and send plain text
+            plain = chunk.replace("*", "").replace("_", "").replace("`", "")
+            await context.bot.send_message(chat_id=chat_id, text=plain)
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -51,7 +70,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             welcome_text = f"Hello {tg_user.first_name or 'there'}! I'm Atlas."
             response = await ai_engine.process_message(user, welcome_text)
 
-        await context.bot.send_message(chat_id=chat_id, text=response)
+        await _send(context, chat_id, response)
 
     except Exception as e:
         logger.error(f"Error in start_handler: {e}", exc_info=True)
@@ -63,7 +82,6 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "or send a voice note / PDF document for analysis."
             )
         )
-
 
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -86,12 +104,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         response = await ai_engine.process_message(user, text)
-        # Telegram has a 4096 char limit — split if needed
-        if len(response) > 4000:
-            for i in range(0, len(response), 4000):
-                await context.bot.send_message(chat_id=chat_id, text=response[i:i+4000])
-        else:
-            await context.bot.send_message(chat_id=chat_id, text=response)
+        await _send(context, chat_id, response)
 
     except Exception as e:
         logger.error(f"Error in text_handler: {e}", exc_info=True)
@@ -122,165 +135,125 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user = await UserRepository.get_or_create_user(
                 telegram_id=tg_user.id,
                 first_name=tg_user.first_name,
+                last_name=tg_user.last_name,
+                username=tg_user.username,
+            )
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🎤 _Transcribed:_ {transcript}",
+                parse_mode=ParseMode.MARKDOWN,
             )
             response = await ai_engine.process_message(user, transcript, message_type="voice")
-            reply = f'🎙️ *"{transcript}"*\n\n{response}'
-            await context.bot.send_message(chat_id=chat_id, text=reply, parse_mode="Markdown")
+            await _send(context, chat_id, response)
         else:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text="I received your voice message but couldn't transcribe it clearly. Could you type that instead?"
+                text="Sorry, I couldn't transcribe that voice note. Could you type your question instead?"
             )
 
     except Exception as e:
         logger.error(f"Error in voice_handler: {e}", exc_info=True)
         await context.bot.send_message(
             chat_id=chat_id,
-            text="I had trouble processing your voice message. Please try again or type your question."
-        )
-
-
-async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle photo/image messages — useful for financial charts, screenshots, etc."""
-    tg_user = update.effective_user
-    chat_id = update.effective_chat.id
-
-    try:
-        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-
-        # Get the highest-resolution photo
-        photo = update.message.photo[-1]
-        photo_file = await photo.get_file()
-        file_path = os.path.join(UPLOAD_DIR, f"photo_{update.message.message_id}.jpg")
-        await photo_file.download_to_drive(file_path)
-
-        caption = update.message.caption or ""
-
-        user = await UserRepository.get_or_create_user(
-            telegram_id=tg_user.id,
-            first_name=tg_user.first_name,
-        )
-
-        # Build prompt based on caption context
-        if caption:
-            prompt = (
-                f"The user has shared a financial chart/image with this caption: '{caption}'. "
-                "Acknowledge you received it and respond to their caption as best you can. "
-                "Note: for full chart analysis, please describe what you see in the chart in text."
-            )
-        else:
-            prompt = (
-                "The user has shared an image (likely a financial chart, stock screenshot, or document). "
-                "Acknowledge you received it and ask them to describe what they need — "
-                "for example: 'What ticker is this?', 'What time period?', 'What would you like to know?'"
-            )
-
-        response = await ai_engine.process_message(user, prompt, message_type="image")
-
-        # Clean up
-        if os.path.exists(file_path):
-            os.remove(file_path)
-
-        await context.bot.send_message(chat_id=chat_id, text=response)
-
-    except Exception as e:
-        logger.error(f"Error in photo_handler: {e}", exc_info=True)
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text="I received your image! For chart analysis, please describe what you're looking at or ask a specific question about it."
+            text="I had trouble processing that voice note. Please try again! 🎤"
         )
 
 
 async def document_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle PDF and DOCX financial document uploads for AI analysis."""
+    """Handle uploaded documents — PDF, DOCX, XLSX analysis."""
     tg_user = update.effective_user
     chat_id = update.effective_chat.id
-    doc = update.message.document
-
-    filename = doc.file_name or "document"
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-
-    if ext not in ("pdf", "docx", "doc", "txt", "xlsx", "xls"):
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=(
-                "I support PDF, Word documents, and Excel spreadsheets (.pdf, .docx, .xlsx) for analysis. "
-                "Please upload a valid financial document."
-            )
-        )
-        return
 
     try:
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+
+        doc = update.message.document
+        if not doc:
+            return
+
+        file_name = doc.file_name or "document"
+        file_ext = file_name.rsplit(".", 1)[-1].lower() if "." in file_name else ""
+
+        supported = ["pdf", "docx", "doc", "xlsx", "xls", "txt", "csv"]
+        if file_ext not in supported:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"I can analyze PDF, DOCX, XLSX, and TXT files. Got a {file_ext.upper()} — not supported yet."
+            )
+            return
+
         await context.bot.send_message(
             chat_id=chat_id,
-            text=f"📄 Received *{filename}*. Extracting and analyzing content — this may take a few seconds...",
-            parse_mode="Markdown"
+            text=f"📄 Got it! Analyzing *{file_name}*...",
+            parse_mode=ParseMode.MARKDOWN,
         )
 
-        file_obj = await doc.get_file()
-        save_path = os.path.join(UPLOAD_DIR, f"doc_{update.message.message_id}_{filename}")
-        await file_obj.download_to_drive(save_path)
+        doc_file = await doc.get_file()
+        file_path = os.path.join(UPLOAD_DIR, f"doc_{update.message.message_id}_{file_name}")
+        await doc_file.download_to_drive(file_path)
+
+        analyzer = DocumentAnalyzerService()
+        analysis = await analyzer.analyze_document(file_path, file_name)
+
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
         user = await UserRepository.get_or_create_user(
             telegram_id=tg_user.id,
             first_name=tg_user.first_name,
+            last_name=tg_user.last_name,
+            username=tg_user.username,
         )
 
-        extracted_text = await DocumentAnalyzerService.extract_text(save_path, ext)
-
-        if not extracted_text:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="I couldn't extract readable text from this document. It may be scanned or image-based."
-            )
-            return
-
-        await DocumentRepository.save_document(
-            telegram_id=tg_user.id,
-            user_id=user.id,
-            filename=filename,
-            file_type=ext,
-            file_path=save_path,
-            file_size=doc.file_size,
-            extracted_text=extracted_text
+        # Build prompt with extracted content
+        caption = update.message.caption or ""
+        prompt = (
+            f"The user uploaded a document: '{file_name}'\n\n"
+            f"Extracted content:\n{analysis.get('text', '')[:3000]}\n\n"
+            f"User's question/note: {caption or 'Please analyze and give key financial insights.'}"
         )
 
-        caption = update.message.caption or "Summarize this document. Highlight key financial metrics, risks, and important takeaways."
-        analysis = await DocumentAnalyzerService.analyze_document(caption, extracted_text, filename=filename)
-
-        response = f"📄 *Analysis: {filename}*\n\n{analysis}"
-
-        # Split long responses
-        if len(response) > 4000:
-            for i in range(0, len(response), 4000):
-                await context.bot.send_message(chat_id=chat_id, text=response[i:i+4000], parse_mode="Markdown")
-        else:
-            await context.bot.send_message(chat_id=chat_id, text=response, parse_mode="Markdown")
+        response = await ai_engine.process_message(user, prompt, message_type="document")
+        await _send(context, chat_id, response)
 
     except Exception as e:
         logger.error(f"Error in document_handler: {e}", exc_info=True)
         await context.bot.send_message(
             chat_id=chat_id,
-            text="I had trouble analyzing this document. Please try again or ensure it's a valid PDF or Word file."
+            text="I had trouble reading that document. Please try again or use PDF/DOCX format."
         )
 
 
-def create_bot_app() -> Application:
-    """Create and configure the Telegram Bot Application."""
-    if not settings.TELEGRAM_BOT_TOKEN:
-        raise ValueError("TELEGRAM_BOT_TOKEN is not set in environment variables.")
+async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle photos — typically charts or screenshots for analysis."""
+    tg_user = update.effective_user
+    chat_id = update.effective_chat.id
 
-    from telegram.request import HTTPXRequest
-    request = HTTPXRequest(connect_timeout=30.0, read_timeout=30.0)
+    try:
+        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
-    app = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).request(request).build()
+        caption = update.message.caption or "Please analyze this chart or image."
 
-    # Register handlers — order matters (most specific first)
+        user = await UserRepository.get_or_create_user(
+            telegram_id=tg_user.id,
+            first_name=tg_user.first_name,
+            last_name=tg_user.last_name,
+            username=tg_user.username,
+        )
+
+        prompt = f"The user sent an image with note: '{caption}'. Acknowledge you received it and provide relevant financial context or ask what specific analysis they need."
+        response = await ai_engine.process_message(user, prompt, message_type="image")
+        await _send(context, chat_id, response)
+
+    except Exception as e:
+        logger.error(f"Error in photo_handler: {e}", exc_info=True)
+
+
+def register_handlers(app: Application):
+    """Register all message handlers with the Telegram application."""
     app.add_handler(CommandHandler("start", start_handler))
-    app.add_handler(MessageHandler(filters.VOICE, voice_handler))
-    app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
-    app.add_handler(MessageHandler(filters.Document.ALL, document_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
-
-    return app
+    app.add_handler(MessageHandler(filters.VOICE, voice_handler))
+    app.add_handler(MessageHandler(filters.Document.ALL, document_handler))
+    app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
+    logger.info("✅ All Telegram handlers registered")
