@@ -54,6 +54,36 @@ class UserRepository:
             return user
 
     @staticmethod
+    async def reset_user(telegram_id: int) -> None:
+        """Reset a user to fresh state — wipes onboarding, watchlist, memory, alerts.
+        Developer/testing use only."""
+        from sqlalchemy import delete
+        async with async_session() as session:
+            # Reset onboarding fields
+            result = await session.execute(
+                select(User).where(User.telegram_id == telegram_id)
+            )
+            user = result.scalar_one_or_none()
+            if user:
+                user.is_onboarded = False
+                user.onboarding_step = None
+                user.role = None
+                user.interests = None
+                user.watchlist = []
+                user.briefing_time = "08:00"
+                user.updated_at = datetime.datetime.utcnow()
+
+            # Delete conversation history
+            await session.execute(
+                delete(Conversation).where(Conversation.telegram_id == telegram_id)
+            )
+            # Delete all alerts
+            await session.execute(
+                delete(Alert).where(Alert.telegram_id == telegram_id)
+            )
+            await session.commit()
+
+    @staticmethod
     async def get_user(telegram_id: int) -> Optional[User]:
         """Get user by telegram ID."""
         async with async_session() as session:

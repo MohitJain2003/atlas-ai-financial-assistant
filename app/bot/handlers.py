@@ -82,6 +82,20 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "or send a voice note / PDF document for analysis."
             )
         )
+async def reset_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/reset — wipe all user data and start fresh (developer testing only)."""
+    tg_user = update.effective_user
+    chat_id = update.effective_chat.id
+    try:
+        await UserRepository.reset_user(tg_user.id)
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="🔄 All your data has been reset. Send /start to begin as a new user!"
+        )
+    except Exception as e:
+        logger.error(f"Error in reset_handler: {e}", exc_info=True)
+        await context.bot.send_message(chat_id=chat_id, text="Reset failed. Try again.")
+
 
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -252,6 +266,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def register_handlers(app: Application):
     """Register all message handlers with the Telegram application."""
     app.add_handler(CommandHandler("start", start_handler))
+    app.add_handler(CommandHandler("reset", reset_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     app.add_handler(MessageHandler(filters.VOICE, voice_handler))
     app.add_handler(MessageHandler(filters.Document.ALL, document_handler))
