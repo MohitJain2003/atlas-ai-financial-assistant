@@ -192,9 +192,13 @@ class AIEngine:
     async def process_message(self, user: User, message: str, message_type: str = "text") -> str:
         """Process a user message and return a personalized AI response."""
         msg_lower = message.lower()
+        is_system_msg = message.startswith("[SYSTEM:")
 
         # Global intercept: Google OAuth connect intent
-        is_google_connect = ("google" in msg_lower and any(kw in msg_lower for kw in ["connect", "link", "login", "auth", "sync", "account", "gmail", "calendar"])) or any(kw in msg_lower for kw in ["connect gmail", "connect calendar", "connect google"])
+        is_google_connect = not is_system_msg and (
+            ("google" in msg_lower and any(kw in msg_lower for kw in ["connect", "link", "login", "auth", "sync", "account", "gmail", "calendar"]))
+            or any(kw in msg_lower for kw in ["connect gmail", "connect calendar", "connect google"])
+        )
         if is_google_connect:
             from app.integrations.google_services import is_google_configured
             if not is_google_configured():
@@ -215,7 +219,7 @@ class AIEngine:
 
         # Global intercept: Calendar/Gmail queries when not connected
         google_query_kws = ["my calendar", "my schedule", "my meetings", "search my email", "my gmail", "my spreadsheet", "my google sheet", "calender"]
-        if any(kw in msg_lower for kw in google_query_kws) and not user.google_tokens:
+        if not is_system_msg and any(kw in msg_lower for kw in google_query_kws) and not user.google_tokens:
             base_url = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
             auth_link = f"{base_url}/auth/google?telegram_id={user.telegram_id}"
             return (
