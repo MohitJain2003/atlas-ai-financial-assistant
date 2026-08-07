@@ -367,12 +367,14 @@ class AIEngine:
             from app.integrations.google_services import is_google_configured
             if not is_google_configured():
                 return (
-                    "⚠️ Google integration isn't configured yet. "
-                    "To enable Calendar, Gmail, and Sheets access, add "
-                    "`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to your `.env` file.\n\n"
-                    "Get credentials at: https://console.cloud.google.com/apis/credentials"
+                    "⚠️ *Google Integration Setup Needed*\n\n"
+                    "To enable Calendar, Gmail, and Sheets access:\n"
+                    "1. Create an OAuth 2.0 Client ID at [Google Cloud Console](https://console.cloud.google.com/)\n"
+                    "2. Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to your environment variables\n"
+                    "3. Set redirect URI to: `https://atlas-ai-financial-assistant-f2m5.onrender.com/auth/google/callback`"
                 )
-            auth_link = f"http://localhost:8000/auth/google?telegram_id={user.telegram_id}"
+            base_url = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
+            auth_link = f"{base_url}/auth/google?telegram_id={user.telegram_id}"
             return (
                 f"🔗 *Connect your Google Account*\n\n"
                 f"Click this link to authorize Atlas:\n{auth_link}\n\n"
