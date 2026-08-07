@@ -24,9 +24,15 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 async def _send(context, chat_id: int, text: str):
-    """Send a message with Markdown formatting, fallback to plain text on parse error."""
-    # Telegram Markdown: *bold*, _italic_, `code`, [link](url)
-    # Split if over 4000 chars
+    """Send a message with Markdown formatting, fallback to plain text on parse error.
+    Auto-converts **double asterisks** to *single* since Telegram only supports single.
+    """
+    import re
+    # Convert **bold** → *bold* (Telegram Markdown uses single asterisk)
+    text = re.sub(r'\*\*(.+?)\*\*', r'*\1*', text)
+    # Remove markdown headers (# Title → Title)
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+
     chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
     for chunk in chunks:
         try:
@@ -36,8 +42,8 @@ async def _send(context, chat_id: int, text: str):
                 parse_mode=ParseMode.MARKDOWN,
             )
         except Exception:
-            # Fallback: strip markdown symbols and send plain text
-            plain = chunk.replace("*", "").replace("_", "").replace("`", "")
+            # Fallback: strip all markdown symbols and send plain text
+            plain = re.sub(r'[*_`\[\]]', '', chunk)
             await context.bot.send_message(chat_id=chat_id, text=plain)
 
 

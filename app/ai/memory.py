@@ -35,7 +35,7 @@ class ConversationMemory:
         if not user:
             return "New user, no profile yet."
 
-        parts = [f"User's name: {user.first_name or 'Unknown'}"]
+        parts = [f"Name: {user.first_name or 'Unknown'}"]
 
         if user.role:
             parts.append(f"Role: {user.role}")
@@ -45,11 +45,13 @@ class ConversationMemory:
             parts.append(f"Watchlist: {', '.join(user.watchlist)}")
         if user.sectors:
             parts.append(f"Sectors: {', '.join(user.sectors)}")
-        if user.preferred_detail_level:
-            parts.append(f"Preferred detail level: {user.preferred_detail_level}")
 
-        parts.append(f"Onboarded: {'Yes' if user.is_onboarded else 'No'}")
-        parts.append(f"Message count: {user.message_count}")
+        if user.is_onboarded:
+            parts.append(
+                "\n⚠️ SETUP IS COMPLETE. NEVER ask this user about their role, sectors, "
+                "watchlist, or any setup/onboarding questions. "
+                "They are a fully onboarded user — just answer their questions directly."
+            )
 
         return "\n".join(parts)
 

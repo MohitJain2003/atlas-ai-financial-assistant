@@ -454,6 +454,32 @@ class AIEngine:
             except Exception:
                 pass
 
+        # Detect comparison queries — fetch all mentioned companies
+        compare_keywords = ["compare", "vs", "versus", "difference between", "better than", "against"]
+        if any(kw in msg_lower for kw in compare_keywords):
+            company_map = {
+                "apple": "AAPL", "microsoft": "MSFT", "google": "GOOGL",
+                "amazon": "AMZN", "tesla": "TSLA", "nvidia": "NVDA", "meta": "META",
+                "netflix": "NFLX", "uber": "UBER", "reliance": "RELIANCE.NS",
+                "infosys": "INFY.NS", "tcs": "TCS.NS", "hdfc": "HDFCBANK.NS",
+                "samsung": "005930.KS", "alibaba": "BABA",
+            }
+            fetched_tickers = set()
+            for name, ticker in company_map.items():
+                if name in msg_lower and ticker not in fetched_tickers:
+                    try:
+                        data = await market_service.get_stock_price(ticker)
+                        if "error" not in data:
+                            results.append(
+                                f"Stock: {ticker} | Price: ${data.get('price', 'N/A')} | "
+                                f"Change: {data.get('change_percent', 'N/A')}% | "
+                                f"52W High: {data.get('week_52_high', 'N/A')} | "
+                                f"52W Low: {data.get('week_52_low', 'N/A')}"
+                            )
+                            fetched_tickers.add(ticker)
+                    except Exception:
+                        pass
+
         return "\n".join(results) if results else ""
 
 
