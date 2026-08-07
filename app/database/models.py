@@ -101,6 +101,10 @@ class Alert(Base):
     is_triggered = Column(Boolean, default=False)
     triggered_at = Column(DateTime, nullable=True)
 
+    # For event reminders (earnings, FOMC, etc.)
+    remind_at = Column(DateTime, nullable=True)   # Exact time to send reminder
+    event_date = Column(String(50), nullable=True) # The event date string
+
     # Metadata
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 

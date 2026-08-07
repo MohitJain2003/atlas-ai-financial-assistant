@@ -258,6 +258,51 @@ async def self_ping_keepalive():
         logger.debug(f"Self-ping skipped (local mode): {e}")
 
 
+async def check_event_reminders():
+    """Fire user-set event reminders (earnings, FOMC, etc.) at the right time."""
+    from app.database.connection import async_session
+    from app.database.models import Alert
+    from sqlalchemy import select
+    now = datetime.utcnow()
+    window_end = now + timedelta(minutes=6)  # 6-min window matches 5-min job interval
+
+    async with async_session() as session:
+        result = await session.execute(
+            select(Alert).where(
+                Alert.alert_type == "event_reminder",
+                Alert.is_active == True,
+                Alert.is_triggered == False,
+                Alert.remind_at >= now,
+                Alert.remind_at <= window_end,
+            )
+        )
+        reminders = result.scalars().all()
+
+    bot = Bot(token=settings.telegram_bot_token)
+    for reminder in reminders:
+        try:
+            ticker_str = f" ({reminder.ticker})'s" if reminder.ticker else ""
+            msg = (
+                f"🔔 *Event Reminder*\n\n"
+                f"You asked me to remind you about{ticker_str} *{reminder.description}*\n"
+                f"📅 Scheduled for: {reminder.event_date}\n\n"
+                f"_Ask me for a pre-event briefing anytime!_"
+            )
+            await bot.send_message(chat_id=reminder.telegram_id, text=msg, parse_mode="Markdown")
+            # Mark as triggered
+            async with async_session() as session:
+                result = await session.execute(select(Alert).where(Alert.id == reminder.id))
+                alert = result.scalar_one_or_none()
+                if alert:
+                    alert.is_triggered = True
+                    alert.triggered_at = now
+                    alert.is_active = False
+                    await session.commit()
+            logger.info(f"🔔 Event reminder fired for {reminder.telegram_id}: {reminder.description}")
+        except Exception as e:
+            logger.error(f"Event reminder error for {reminder.telegram_id}: {e}")
+
+
 def start_scheduler():
     """Start all background jobs."""
     if scheduler.running:
@@ -278,6 +323,9 @@ def start_scheduler():
     # Earnings reminder — every hour (only actually sends at 7 AM)
     scheduler.add_job(send_earnings_reminders, "cron", minute=5, id="earnings_reminders", replace_existing=True)
 
+    # Event reminders (user-set: "remind me 1hr before Apple earnings") — every 5 minutes
+    scheduler.add_job(check_event_reminders, "interval", minutes=5, id="event_reminders", replace_existing=True)
+
     # Self-ping keep-alive — every 10 minutes (backup for UptimeRobot on Render)
     scheduler.add_job(self_ping_keepalive, "interval", minutes=10, id="self_ping", replace_existing=True)
 
@@ -285,5 +333,5 @@ def start_scheduler():
     logger.info(
         "⏱️ Scheduler started: Morning Briefings + Evening Summaries + "
         "Price Alerts (15min) + News Monitor (2hr) + Earnings Reminders (7AM) + "
-        "Self-Ping Keep-Alive (10min)"
+        "Event Reminders (5min) + Self-Ping Keep-Alive (10min)"
     )

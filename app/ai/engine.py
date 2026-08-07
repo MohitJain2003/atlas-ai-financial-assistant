@@ -141,6 +141,39 @@ async def handle_tool_call(tool_name: str, tool_args: dict, user: User = None) -
             )
             return {"emails": emails, "count": len(emails)}
 
+        elif tool_name == "set_event_reminder":
+            from datetime import datetime, timedelta
+            from app.database.connection import async_session
+            from app.database.models import Alert as AlertModel
+            event_date_str = tool_args.get("event_date", "")
+            advance_minutes = int(tool_args.get("advance_minutes", 60))
+            event_description = tool_args.get("event_description", "Financial Event")
+            ticker = tool_args.get("ticker", "")
+            try:
+                event_dt = datetime.strptime(event_date_str, "%Y-%m-%d").replace(hour=9, minute=30)
+                remind_at = event_dt - timedelta(minutes=advance_minutes)
+                async with async_session() as session:
+                    alert = AlertModel(
+                        user_id=user.id,
+                        telegram_id=user.telegram_id,
+                        alert_type="event_reminder",
+                        ticker=ticker or None,
+                        description=event_description,
+                        remind_at=remind_at,
+                        event_date=event_date_str,
+                        is_active=True,
+                    )
+                    session.add(alert)
+                    await session.commit()
+                advance_label = f"{advance_minutes} minutes" if advance_minutes < 60 else f"{advance_minutes // 60} hour(s)"
+                return {
+                    "success": True,
+                    "message": f"Reminder set for '{event_description}' — I'll notify you {advance_label} before on {event_date_str}.",
+                    "remind_at": remind_at.strftime("%Y-%m-%d %H:%M")
+                }
+            except ValueError:
+                return {"error": "Invalid date format. Please provide date as YYYY-MM-DD."}
+
         else:
             return {"error": f"Unknown tool: {tool_name}"}
 

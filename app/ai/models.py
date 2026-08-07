@@ -340,6 +340,35 @@ FINANCIAL_TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_event_reminder",
+            "description": "Set a reminder for an upcoming event like earnings, FOMC, CPI report, or any financial event. User can say 'remind me 1 hour before Apple earnings' or 'remind me on earnings day for Tesla'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ticker": {
+                        "type": "string",
+                        "description": "Stock ticker symbol (e.g. AAPL, TSLA). Leave empty for macro events like FOMC."
+                    },
+                    "event_description": {
+                        "type": "string",
+                        "description": "Description of the event (e.g. 'Q3 earnings call', 'FOMC meeting', 'CPI release')"
+                    },
+                    "event_date": {
+                        "type": "string",
+                        "description": "Date of the event in YYYY-MM-DD format"
+                    },
+                    "advance_minutes": {
+                        "type": "integer",
+                        "description": "How many minutes before the event to send the reminder. 60 = 1 hour before, 1440 = 1 day before. Default: 60"
+                    }
+                },
+                "required": ["event_description", "event_date"]
+            }
+        }
+    },
 ]
 
 
