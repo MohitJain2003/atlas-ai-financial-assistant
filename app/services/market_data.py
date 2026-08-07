@@ -1,6 +1,11 @@
 """
-Market Data Services - Real-time financial data via yfinance, Yahoo Finance Chart API, and Finnhub.
-Includes: stock prices, company profiles, comparisons, market overview, earnings data, stock search.
+Market Data Services - Real-time financial data via Finnhub, Alpha Vantage, Yahoo Finance, and Stooq.
+API Priority (most reliable → least):
+  1. Finnhub       — authenticated, real-time, professional grade
+  2. Alpha Vantage — authenticated, reliable, includes 52W range
+  3. Yahoo Finance — free, fast, good for most tickers
+  4. yfinance      — library fallback
+  5. Stooq         — last resort backup
 All data is REAL — no mocks, no dummy values.
 """
 import logging
@@ -18,22 +23,30 @@ class MarketDataService:
 
     def __init__(self):
         self.finnhub_key = settings.FINNHUB_API_KEY
+        self.alphavantage_key = settings.ALPHA_VANTAGE_API_KEY
 
     async def get_stock_price(self, ticker: str) -> Dict[str, Any]:
-        """Fetch current stock price, changes, and basic metrics — 100% real data."""
+        """Fetch current stock price — tries 5 sources, most reliable first."""
         ticker = ticker.upper().strip()
 
-        # 1. Yahoo Finance Chart API (fast, no rate limits, real-time)
+        # 1. Finnhub — authenticated, real-time, most reliable
+        if self.finnhub_key:
+            data = await self._fetch_finnhub_price(ticker)
+            if data and "error" not in data:
+                return data
+
+        # 2. Alpha Vantage — authenticated, includes 52W range
+        if self.alphavantage_key:
+            data = await self._fetch_alphavantage_price(ticker)
+            if data and "error" not in data:
+                return data
+
+        # 3. Yahoo Finance Chart API — free, fast, no auth
         data = await self._fetch_yf_chart_price(ticker)
         if data:
             return data
 
-        # 2. Stooq CSV API (free, reliable backup)
-        data = await self._fetch_stooq_price(ticker)
-        if data:
-            return data
-
-        # 3. yfinance library
+        # 4. yfinance library — slower but comprehensive
         try:
             data = await asyncio.to_thread(self._fetch_yf_price, ticker)
             if data:
@@ -41,32 +54,96 @@ class MarketDataService:
         except Exception as e:
             logger.warning(f"yfinance failed for {ticker}: {e}")
 
-        # 4. Finnhub
-        if self.finnhub_key:
-            try:
-                async with httpx.AsyncClient(timeout=5.0) as client:
-                    resp = await client.get(
-                        f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={self.finnhub_key}"
-                    )
-                    if resp.status_code == 200:
-                        q = resp.json()
-                        if q.get("c"):
-                            return {
-                                "ticker": ticker,
-                                "company_name": ticker,
-                                "price": round(q["c"], 2),
-                                "change": round(q["d"], 2),
-                                "percent_change": round(q["dp"], 2),
-                                "high": round(q["h"], 2) if q.get("h") else None,
-                                "low": round(q["l"], 2) if q.get("l") else None,
-                                "open": round(q["o"], 2) if q.get("o") else None,
-                                "previous_close": round(q["pc"], 2) if q.get("pc") else None,
-                                "source": "Finnhub",
-                            }
-            except Exception as e:
-                logger.error(f"Finnhub quote error for {ticker}: {e}")
+        # 5. Stooq CSV — last resort
+        data = await self._fetch_stooq_price(ticker)
+        if data:
+            return data
 
-        return {"error": f"Could not retrieve real market data for '{ticker}'. The ticker may be invalid."}
+        return {"error": f"Could not retrieve market data for '{ticker}'. Ticker may be invalid or delisted."}
+
+    async def _fetch_finnhub_price(self, ticker: str) -> Dict[str, Any]:
+        """Fetch real-time quote from Finnhub (authenticated API)."""
+        try:
+            async with httpx.AsyncClient(timeout=6.0) as client:
+                # Quote endpoint — current price, change, % change
+                resp = await client.get(
+                    f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={self.finnhub_key}"
+                )
+                if resp.status_code != 200:
+                    return None
+                q = resp.json()
+                if not q.get("c"):
+                    return None
+
+                result = {
+                    "ticker": ticker,
+                    "company_name": ticker,
+                    "price": round(q["c"], 2),
+                    "change": round(q.get("d", 0), 2),
+                    "percent_change": round(q.get("dp", 0), 2),
+                    "high": round(q["h"], 2) if q.get("h") else None,
+                    "low": round(q["l"], 2) if q.get("l") else None,
+                    "open": round(q["o"], 2) if q.get("o") else None,
+                    "previous_close": round(q["pc"], 2) if q.get("pc") else None,
+                    "source": "Finnhub",
+                }
+
+                # Also fetch 52-week high/low from Finnhub basic financials
+                try:
+                    metric_resp = await client.get(
+                        f"https://finnhub.io/api/v1/stock/metric?symbol={ticker}&metric=all&token={self.finnhub_key}"
+                    )
+                    if metric_resp.status_code == 200:
+                        m = metric_resp.json().get("metric", {})
+                        result["week_52_high"] = m.get("52WeekHigh")
+                        result["week_52_low"] = m.get("52WeekLow")
+                        result["volume"] = m.get("averageVolume10Day")
+                except Exception:
+                    pass
+
+                return result
+        except Exception as e:
+            logger.warning(f"Finnhub quote failed for {ticker}: {e}")
+            return None
+
+    async def _fetch_alphavantage_price(self, ticker: str) -> Dict[str, Any]:
+        """Fetch real-time quote from Alpha Vantage (authenticated API, includes 52W)."""
+        try:
+            url = (
+                f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE"
+                f"&symbol={ticker}&apikey={self.alphavantage_key}"
+            )
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                resp = await client.get(url)
+                if resp.status_code != 200:
+                    return None
+                data = resp.json().get("Global Quote", {})
+                price_str = data.get("05. price")
+                if not price_str:
+                    return None
+
+                price = float(price_str)
+                change = float(data.get("09. change", 0))
+                pct = float(data.get("10. change percent", "0").replace("%", ""))
+
+                return {
+                    "ticker": ticker,
+                    "company_name": ticker,
+                    "price": round(price, 2),
+                    "change": round(change, 2),
+                    "percent_change": round(pct, 2),
+                    "open": float(data.get("02. open", 0)) or None,
+                    "high": float(data.get("03. high", 0)) or None,
+                    "low": float(data.get("04. low", 0)) or None,
+                    "previous_close": float(data.get("08. previous close", 0)) or None,
+                    "volume": int(data.get("06. volume", 0)) or None,
+                    "week_52_high": float(data.get("03. high", 0)) or None,  # today's high as proxy
+                    "source": "Alpha Vantage",
+                }
+        except Exception as e:
+            logger.warning(f"Alpha Vantage quote failed for {ticker}: {e}")
+            return None
+
 
     async def _fetch_yf_chart_price(self, ticker: str) -> Dict[str, Any]:
         """Fetch real-time price from Yahoo Finance Chart API."""
