@@ -75,7 +75,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "build": "v2.6-clean-google-prompts"}
+    return {"status": "healthy", "build": "v2.7-global-google-intercept"}
 
 
 @app.get("/debug/price/{ticker}")

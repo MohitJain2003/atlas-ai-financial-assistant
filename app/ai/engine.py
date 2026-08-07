@@ -190,6 +190,42 @@ class AIEngine:
 
     async def process_message(self, user: User, message: str, message_type: str = "text") -> str:
         """Process a user message and return a personalized AI response."""
+        msg_lower = message.lower()
+
+        # Global intercept: Google OAuth connect intent
+        if any(kw in msg_lower for kw in ["connect google", "link google", "google account", "connect gmail", "connect calendar", "connect my google"]):
+            from app.integrations.google_services import is_google_configured
+            if not is_google_configured():
+                return (
+                    "⚠️ *Google Integration Setup Needed*\n\n"
+                    "To enable Calendar, Gmail, and Sheets access:\n"
+                    "1. Create an OAuth 2.0 Client ID at [Google Cloud Console](https://console.cloud.google.com/)\n"
+                    "2. Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to your environment variables\n"
+                    "3. Set redirect URI to: `https://atlas-ai-financial-assistant-f2m5.onrender.com/auth/google/callback`"
+                )
+            base_url = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
+            auth_link = f"{base_url}/auth/google?telegram_id={user.telegram_id}"
+            return (
+                f"🔗 *Connect your Google Account*\n\n"
+                f"Click this link to authorize Atlas:\n{auth_link}\n\n"
+                f"Once connected, I can access your:\n"
+                f"📅 *Google Calendar* — view & create events\n"
+                f"📧 *Gmail* — search emails about companies\n"
+                f"📊 *Google Sheets* — analyze spreadsheets"
+            )
+
+        # Global intercept: Calendar/Gmail queries when not connected
+        google_query_kws = ["my calendar", "my schedule", "my meetings", "search my email", "my gmail", "my spreadsheet", "my google sheet", "calender"]
+        if any(kw in msg_lower for kw in google_query_kws) and not user.google_tokens:
+            base_url = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
+            auth_link = f"{base_url}/auth/google?telegram_id={user.telegram_id}"
+            return (
+                f"📅 *Google Account Not Connected*\n\n"
+                f"To check your calendar or search your emails, please link your Google account first:\n\n"
+                f"🔗 [Click here to Connect Google]({auth_link})\n\n"
+                f"Once authorized, I can view your schedule, search emails, and update spreadsheets directly!"
+            )
+
         if not user.is_onboarded:
             # If user asks a real financial/market question during onboarding,
             # complete onboarding silently and answer their question directly.
@@ -206,7 +242,6 @@ class AIEngine:
                 r"tell me about \w+", r"show me \w+", r"\btrading at\b",
                 r"\bmarket cap\b", r"\bpe ratio\b", r"\bshare price\b",
             ]
-            msg_lower = message.lower()
             is_financial_query = any(
                 re.search(p, msg_lower) for p in financial_patterns
             )
