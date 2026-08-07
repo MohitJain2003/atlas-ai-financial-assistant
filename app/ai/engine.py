@@ -3,6 +3,7 @@ AI Engine - Main orchestrator: tool calling, conversation memory, onboarding, an
 Handles: stock data, news, SEC filings, analyst ratings, insider data, economic events,
          Google Calendar, Gmail, Google Sheets, price alerts, earnings, and more.
 """
+import os
 import logging
 import json
 import re
