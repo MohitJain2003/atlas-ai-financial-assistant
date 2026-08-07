@@ -32,15 +32,16 @@ class Settings:
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
     GOOGLE_REDIRECT_URI: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/google/callback")
 
-    # Database — auto-converts Render's postgres:// to postgresql+asyncpg:// for async SQLAlchemy
+    # Database — auto-converts Render's postgres:// to postgresql+psycopg:// for async SQLAlchemy
+    # Uses psycopg[binary] (psycopg3) which has Python 3.14 pre-built wheels (unlike asyncpg)
     @property
     def DATABASE_URL(self) -> str:
         url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./atlas_financial.db")
-        # Render provides postgres:// — convert to async-compatible postgresql+asyncpg://
+        # Render provides postgres:// — convert to async-compatible postgresql+psycopg://
         if url.startswith("postgres://"):
-            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
-        elif url.startswith("postgresql://") and "+asyncpg" not in url:
-            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            url = url.replace("postgres://", "postgresql+psycopg://", 1)
+        elif url.startswith("postgresql://") and "+psycopg" not in url and "+asyncpg" not in url:
+            url = url.replace("postgresql://", "postgresql+psycopg://", 1)
         return url
 
     # Bot Settings
