@@ -101,6 +101,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"[SYSTEM: New user {name} sent /start. Greet them warmly as {name}! "
                 f"Introduce yourself as Atlas — their AI financial analyst on Telegram. "
                 f"Briefly summarize what you can do (live market prices, earnings breakdowns, SEC filings, price alerts, daily briefs, voice notes & PDF document analysis — all via natural conversation, no slash commands needed). "
+                f"Add a short note: 'To sync your Google Calendar, Gmail, and Sheets, just say **connect google** anytime!' "
                 f"Then ask what best describes their primary role (Investor, Analyst, Founder, Trader, Student) or what stocks/markets they are watching today.]"
             )
             response = await ai_engine.process_message(user, welcome_text)
