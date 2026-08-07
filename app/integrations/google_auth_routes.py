@@ -58,10 +58,17 @@ async def google_auth_callback(request: Request, code: str = None, state: str = 
 
     try:
         telegram_id = int(state)
-        token_data = exchange_code_for_tokens(code, state, authorization_response=str(request.url))
+        from app.integrations.google_services import exchange_code_for_tokens_async
+        token_data = await exchange_code_for_tokens_async(code, state, authorization_response=str(request.url))
 
         if not token_data:
-            raise ValueError("Token exchange returned empty result")
+            return HTMLResponse("""
+                <html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0f0f23;color:white">
+                <h2 style="color:#ef4444">❌ Google Token Exchange Failed</h2>
+                <p style="color:#ccc">The authorization code expired or Google returned an authentication error.</p>
+                <p style="color:#999;font-size:14px">Please return to Telegram and click <b>Connect Google</b> to try again with a fresh session.</p>
+                </body></html>
+            """)
 
         # Save tokens to user record in database
         await UserRepository.update_user(telegram_id, google_tokens=token_data)

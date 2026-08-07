@@ -73,47 +73,92 @@ def get_auth_url(telegram_id: int) -> str:
     return auth_url
 
 
-def exchange_code_for_tokens(code: str, state: str, authorization_response: Optional[str] = None) -> Optional[Dict]:
-    """Exchange authorization code for access and refresh tokens."""
-    try:
-        from google_auth_oauthlib.flow import Flow
-        client_id, client_secret = get_google_credentials()
-        redirect_uri = get_redirect_uri()
+async def exchange_code_for_tokens_async(code: str, state: str = None, authorization_response: Optional[str] = None) -> Optional[Dict]:
+    """Exchange authorization code for access and refresh tokens via direct HTTP POST."""
+    client_id, client_secret = get_google_credentials()
+    redirect_uri = get_redirect_uri()
 
-        client_config = {
-            "web": {
+    if not client_id or not client_secret:
+        logger.error("Google OAuth credentials missing in environment variables.")
+        return None
+
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            res = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "code": code,
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "redirect_uri": redirect_uri,
+                    "grant_type": "authorization_code",
+                }
+            )
+
+        if res.status_code == 200:
+            data = res.json()
+            expiry_dt = datetime.now(timezone.utc) + timedelta(seconds=data.get("expires_in", 3600))
+            token_data = {
+                "token": data.get("access_token"),
+                "refresh_token": data.get("refresh_token"),
+                "token_uri": "https://oauth2.googleapis.com/token",
                 "client_id": client_id,
                 "client_secret": client_secret,
-                "redirect_uris": [redirect_uri],
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
+                "scopes": data.get("scope", "").split(" ") if data.get("scope") else SCOPES,
+                "expiry": expiry_dt.isoformat(),
             }
-        }
-
-        flow = Flow.from_client_config(client_config, scopes=SCOPES, state=state)
-        flow.redirect_uri = redirect_uri
-
-        if authorization_response:
-            # Fix http -> https header issue behind Render reverse proxy
-            if authorization_response.startswith("http://") and "localhost" not in authorization_response:
-                authorization_response = authorization_response.replace("http://", "https://", 1)
-            flow.fetch_token(authorization_response=authorization_response)
+            logger.info(f"Google OAuth token exchange SUCCESS for user state={state}")
+            return token_data
         else:
-            flow.fetch_token(code=code)
-
-        creds = flow.credentials
-        return {
-            "token": creds.token,
-            "refresh_token": creds.refresh_token,
-            "token_uri": creds.token_uri,
-            "client_id": creds.client_id,
-            "client_secret": creds.client_secret,
-            "scopes": list(creds.scopes) if creds.scopes else [],
-            "expiry": creds.expiry.isoformat() if creds.expiry else None,
-        }
+            logger.error(f"Google OAuth token exchange HTTP error {res.status_code}: {res.text}")
     except Exception as e:
-        logger.error(f"Token exchange failed: {type(e).__name__}: {e}", exc_info=True)
+        logger.error(f"Google OAuth token exchange exception: {type(e).__name__}: {e}", exc_info=True)
+
+    # Fallback to sync method if async fails
+    return exchange_code_for_tokens(code, state, authorization_response)
+
+
+def exchange_code_for_tokens(code: str, state: str, authorization_response: Optional[str] = None) -> Optional[Dict]:
+    """Synchronous fallback exchange authorization code for access and refresh tokens."""
+    client_id, client_secret = get_google_credentials()
+    redirect_uri = get_redirect_uri()
+
+    if not client_id or not client_secret:
+        logger.error("Google OAuth credentials missing in environment variables.")
         return None
+
+    try:
+        import requests
+        res = requests.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+            timeout=15.0
+        )
+        if res.status_code == 200:
+            data = res.json()
+            expiry_dt = datetime.now(timezone.utc) + timedelta(seconds=data.get("expires_in", 3600))
+            return {
+                "token": data.get("access_token"),
+                "refresh_token": data.get("refresh_token"),
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "scopes": data.get("scope", "").split(" ") if data.get("scope") else SCOPES,
+                "expiry": expiry_dt.isoformat(),
+            }
+        else:
+            logger.error(f"Sync token exchange HTTP error {res.status_code}: {res.text}")
+    except Exception as e:
+        logger.error(f"Sync token exchange exception: {type(e).__name__}: {e}", exc_info=True)
+
+    return None
 
 
 def build_service_from_tokens(service_name: str, version: str, token_data: dict):
