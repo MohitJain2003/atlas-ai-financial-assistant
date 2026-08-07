@@ -75,7 +75,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "build": "v2.3-universal-tickers"}
+    return {"status": "healthy", "build": "v2.4-emoji-name-polish"}
 
 
 @app.get("/debug/price/{ticker}")
