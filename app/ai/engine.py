@@ -361,8 +361,9 @@ class AIEngine:
     async def _handle_conversation(self, user: User, message: str) -> str:
         """Handle a regular conversation with full tools, memory, and personalization."""
 
-        # Check for Google connect intent
-        if any(kw in message.lower() for kw in ["connect google", "link google", "google account", "connect gmail", "connect calendar"]):
+        # Check for Google connect intent or Google feature request without tokens
+        msg_lower = message.lower()
+        if any(kw in msg_lower for kw in ["connect google", "link google", "google account", "connect gmail", "connect calendar"]):
             from app.config import settings
             from app.integrations.google_services import is_google_configured
             if not is_google_configured():
@@ -382,6 +383,18 @@ class AIEngine:
                 f"📅 *Google Calendar* — view & create events\n"
                 f"📧 *Gmail* — search emails about companies\n"
                 f"📊 *Google Sheets* — analyze spreadsheets"
+            )
+
+        # Catch calendar/gmail requests for unconnected users
+        google_query_kws = ["my calendar", "my schedule", "my meetings", "search my email", "my gmail", "my spreadsheet", "my google sheet", "calender"]
+        if any(kw in msg_lower for kw in google_query_kws) and not user.google_tokens:
+            base_url = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
+            auth_link = f"{base_url}/auth/google?telegram_id={user.telegram_id}"
+            return (
+                f"📅 *Google Account Not Connected*\n\n"
+                f"To check your calendar or search your emails, please link your Google account first:\n\n"
+                f"🔗 [Click here to Connect Google]({auth_link})\n\n"
+                f"Once authorized, I can view your schedule, search emails, and update spreadsheets directly!"
             )
 
         user_context = await self.memory.get_user_context(user)

@@ -28,6 +28,12 @@ async def _send(context, chat_id: int, text: str):
     Auto-converts **double asterisks** to *single* since Telegram only supports single.
     """
     import re
+    # Strip raw LLM function calling tags if any model outputs them as text
+    text = re.sub(r'<function=.*?>.*?</function>', '', text)
+    text = re.sub(r'<function=.*?>', '', text)
+    text = re.sub(r'</function>', '', text)
+    text = re.sub(r'<tool_call>.*?</tool_call>', '', text)
+
     # Convert **bold** → *bold* (Telegram Markdown uses single asterisk)
     text = re.sub(r'\*\*(.+?)\*\*', r'*\1*', text)
     # Remove markdown headers (# Title → Title)
