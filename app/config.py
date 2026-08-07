@@ -30,7 +30,7 @@ class Settings:
     # Google OAuth2 Integration
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
-    GOOGLE_REDIRECT_URI: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/google/callback")
+    GOOGLE_REDIRECT_URI: str = os.getenv("GOOGLE_REDIRECT_URI", "https://atlas-ai-financial-assistant-f2m5.onrender.com/auth/google/callback")
 
     # Database — auto-converts Render's postgres:// to postgresql+psycopg:// for async SQLAlchemy
     # Uses psycopg[binary] (psycopg3) which has Python 3.14 pre-built wheels (unlike asyncpg)
