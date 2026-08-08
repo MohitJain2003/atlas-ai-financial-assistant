@@ -229,28 +229,18 @@ class AIEngine:
             )
 
         if not user.is_onboarded:
-            # If user asks a real financial/market question OR Google query during onboarding,
-            # complete onboarding silently and answer their question directly.
-            # Don't make them wait — feel like an analyst, not a form.
-            financial_patterns = [
-                r"\bprice\b", r"\bstock\b", r"\bmarket\b", r"\bshare\b",
-                r"\bcrypto\b", r"\bbitcoin\b", r"\bportfolio\b", r"\brevenue\b",
-                r"\bchart\b", r"\bbuy\b", r"\bsell\b", r"\bnews\b",
-                r"\bticker\b", r"\bnasdaq\b", r"\bdow\b", r"\bipo\b",
-                r"\bdividend\b", r"\bearnings\b", r"\bfomc\b", r"\bcpi\b",
-                r"\bgdp\b", r"\banalyst\b", r"\binsider\b", r"\bfiling\b",
-                r"\bsec\b", r"what'?s\s+\w+\s+stock", r"how is the market",
-                r"tell me about \w+", r"show me \w+", r"\btrading at\b",
-                r"\bmarket cap\b", r"\bpe ratio\b", r"\bshare price\b",
-                r"\bcalendar\b", r"\bmeeting\b", r"\bschedule\b", r"\bevent\b",
-                r"\bgmail\b", r"\bemail\b", r"\bsheet\b", r"\bspreadsheet\b",
-            ]
-            is_financial_query = bool(user.google_tokens) or any(
-                re.search(p, msg_lower) for p in financial_patterns
+            # Only bypass onboarding if user asks an explicit market question (e.g. "Apple stock price"),
+            # NOT when answering onboarding steps (e.g. "investor", "tech", "8 AM").
+            onboarding_keywords = ["investor", "analyst", "founder", "trader", "student", "skip"]
+            is_explicit_question = any(
+                re.search(p, msg_lower) for p in [
+                    r"what'?s\s+\w+\s+stock", r"how is the market", r"tell me about \w+",
+                    r"\bstock price\b", r"\bshare price\b", r"\bearnings report\b",
+                    r"\bsec filing\b", r"\b10-k\b", r"\b10-q\b"
+                ]
             )
 
-            if is_financial_query:
-                # Silently mark onboarding complete and answer the question directly
+            if is_explicit_question and not any(kw == msg_lower for kw in onboarding_keywords):
                 await UserRepository.update_user(
                     user.telegram_id, is_onboarded=True, onboarding_step="complete"
                 )
@@ -258,6 +248,7 @@ class AIEngine:
                 response = await self._handle_conversation(user, message)
             else:
                 response = await self._handle_onboarding(user, message)
+            return response
         else:
             response = await self._handle_conversation(user, message)
 
