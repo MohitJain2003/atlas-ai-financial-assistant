@@ -1,48 +1,64 @@
 # Atlas AI Financial Assistant 📈🤖
 
-An AI-powered Financial Assistant built inside Telegram for finance professionals, analysts, founders, and investors.
+An AI-powered Financial Analyst built inside Telegram for finance professionals, analysts, founders, and investors.
 
-> **Live Bot Username**: [@AtlasFinanceAssistantBot](https://t.me/AtlasFinanceAssistantBot)
+> **Live Telegram Bot**: [@AtlasFinanceAssistantBot](https://t.me/AtlasFinanceAssistantBot)  
+> **Live Web Backend**: [https://atlas-ai-financial-assistant-f2m5.onrender.com](https://atlas-ai-financial-assistant-f2m5.onrender.com)
 
 ---
 
 ## 🎯 Overview & Product Philosophy
 
-Finance professionals spend hours every day context-switching between terminals, filings, news feeds, spreadsheets, and messaging apps. **Atlas** simplifies this workflow by acting as an experienced financial analyst available 24/7 inside Telegram through natural conversation.
+Finance professionals spend hours every day context-switching between terminals, SEC filings, market feeds, spreadsheets, and messaging apps. **Atlas** simplifies this workflow by acting as an experienced financial analyst available 24/7 inside Telegram through natural conversation.
 
 ### Design Principles:
-- **Natural Conversation First**: No slash commands, inline buttons, or rigid menus.
-- **Proactive Intelligence**: Delivers morning briefings and price alerts without being asked.
-- **Why It Matters**: Explains the financial significance behind stock movements and news.
-- **Multi-Modal Support**: Accepts text, voice notes (transcribed via Whisper), and PDF/DOCX financial documents.
-- **Resilient AI Chain**: Powered by a 6-provider fallback chain (Gemini, Groq, OpenRouter, Mistral, SambaNova, Cerebras).
+- **Natural Conversation First**: No clunky slash commands or rigid menus required.
+- **Proactive Intelligence**: Delivers automated morning market briefings, price alerts, and event reminders.
+- **Context Over Raw Data**: Answers *"what does this mean?"* alongside real-time figures.
+- **Multi-Modal Support**: Accepts text, voice notes (transcribed via Groq Whisper), and PDF, DOCX, XLSX, and CSV documents.
+- **Google Workspace Integration**: Seamlessly syncs Google Calendar, Gmail, and Google Sheets via OAuth 2.0.
+- **Resilient AI Chain**: Powered by a 6-provider fallback chain (Gemini 2.0, Groq Llama 3.3 70B, OpenRouter, Mistral, SambaNova, Cerebras).
+- **24/7 Uptime**: Equipped with an internal self-ping heartbeat job to keep Render active 24/7.
 
 ---
 
 ## ✨ Features & Capabilities
 
 ### 1. Conversational Onboarding
-- Natural 5-step onboarding flow (Role → Sectors → Watchlist → Preferences → Briefing Time).
-- Gradually builds user context over time. Users can skip any step anytime.
+- Smooth 4-step onboarding flow (Role → Sectors → Watchlist → Morning Briefing Time).
+- Built-in parenthetical guidance `(e.g., tech, finance, crypto)` for effortless responses.
+- Allows skipping any step anytime by typing `skip` or asking a direct stock question.
 
-### 2. Live Market & Stock Intelligence
-- Real-time stock prices, intraday changes, highs/lows, and market caps.
-- Company fundamental research (P/E ratios, sector data, dividend yields).
-- Multi-company comparison tool.
-- Market overview (S&P 500, Nasdaq, Dow Jones).
+### 2. Live Market Data & Fundamental Research
+- Real-time stock prices, intraday changes, 52-week ranges, and open/high/low quotes via **Finnhub** & **Alpha Vantage**.
+- Fundamental company profiles (P/E ratios, profit margins, market caps, dividend yields).
+- Multi-company comparison tool (`AAPL vs MSFT`).
+- Global market overview (S&P 500, Nasdaq, Dow Jones).
 
-### 3. Proactive Intelligence & Daily Briefings
-- Automated morning market briefings tailored to user watchlist and role.
-- Background price alert monitoring (triggers on target prices or % swings).
-- Smart silence logic (avoids spamming when no meaningful events occur).
+### 3. SEC Filings & Institutional Research
+- **SEC EDGAR Integration**: Instant access to 10-K annual reports, 10-Q quarterly reports, and 8-K material events.
+- **Analyst Ratings**: Wall Street consensus targets (Buy/Hold/Sell breakdowns, target price ranges).
+- **Insider Transactions**: Form 4 executive buy/sell tracking.
+- **Earnings & Economic Calendars**: FOMC, CPI, NFP schedules & upcoming corporate earnings dates.
 
-### 4. Financial Document Analysis
-- Upload PDF or Word (.docx) annual reports, earnings presentations, or decks.
-- Extracts financial metrics, key takeaways, and answers natural language questions about the document.
+### 4. 🔑 Google Workspace Integration (OAuth 2.0)
+- **Google Calendar**: View upcoming schedule, check meetings, and create calendar events naturally.
+- **Gmail Integration**: Search inbox for company news, meeting invites, or stock alerts.
+- **Google Sheets**: Analyze spreadsheets directly inside Telegram.
+- Clean **`[🔑 Connect to Google]`** inline keyboard button for authorization.
 
-### 5. Voice Message Intelligence
-- Send voice notes directly in Telegram.
+### 5. 📄 Multi-Format Document & Spreadsheet Analysis
+- Upload **PDF**, **Word (.docx)**, **Excel (.xlsx)**, **CSV**, or **TXT** files directly in Telegram.
+- Parses financial tables, calculates cost basis, unrealized profit/loss %, and highlights top-performing assets.
+
+### 6. 🎙️ Voice Message Intelligence
+- Send Telegram voice notes recorded on your phone or desktop.
 - Transcribed asynchronously with Groq Whisper (`whisper-large-v3`) and processed by the AI engine.
+
+### 7. 🔔 Proactive Daily Briefings & Alerts
+- Personalized morning market briefings delivered daily at the user's preferred time (e.g. 8:00 AM).
+- Custom price alerts (`Alert me if NVDA drops below $110`).
+- Event reminders (`Remind me 1hr before Apple earnings`).
 
 ---
 
@@ -52,25 +68,29 @@ Finance professionals spend hours every day context-switching between terminals,
 [ Telegram User ]
        │
        ▼ (Text / Voice / Document)
-[ python-telegram-bot (v21) ]
+[ python-telegram-bot (v21) ] ── (Long Polling + HTTPX Timeouts)
        │
        ▼
 [ FastAPI Backend (Python 3.12) ]
        │
        ├──► [ AI Engine & Tool Orchestrator ]
        │          │
-       │          ├──► Function Calling (Stock Prices, Profiles, News)
+       │          ├──► Real-Time Market Tools (Finnhub API, Alpha Vantage, SEC EDGAR)
+       │          ├──► Google Services (Google Calendar API, Gmail API, Sheets API)
        │          └──► Multi-Model Fallback Chain:
-       │                1. Gemini 2.5 Flash
+       │                1. Gemini 2.0 Flash
        │                2. Groq Llama 3.3 70B
        │                3. OpenRouter Auto
        │                4. Mistral Small
        │                5. SambaNova Llama 3.3 70B
        │                6. Cerebras gpt-oss-120b
        │
-       ├──► [ Async SQLite Database (SQLAlchemy) ] (Users, Memory, Alerts, Docs)
+       ├──► [ Async Database (SQLAlchemy) ] (Users, Google Tokens, Watchlists, Alerts)
        │
-       └──► [ APScheduler Background Jobs ] (Morning Briefings, Price Alerts)
+       └──► [ APScheduler Background Jobs ] 
+                  ├──► Daily Morning Briefings
+                  ├──► Price Alert Monitoring (Every 15 min)
+                  └──► 24/7 Self-Ping Keep-Alive Heartbeat (Every 4 min)
 ```
 
 ---
@@ -79,32 +99,35 @@ Finance professionals spend hours every day context-switching between terminals,
 
 ```
 atlas-financial-assistant/
-├── main.py                       # FastAPI entry point & bot polling runner
-├── requirements.txt              # Dependencies
-├── .env                          # Configuration & API keys
+├── main.py                       # FastAPI entry point & Telegram bot polling runner
+├── requirements.txt              # Production dependencies
+├── .env                          # Configuration & API credentials
 ├── .env.example                  # Environment template
-├── pyrightconfig.json            # VS Code Pyright configuration
 │
 ├── app/
-│   ├── config.py                 # Central settings & env loader
+│   ├── config.py                 # Central settings & env variable loader
 │   ├── bot/
-│   │   └── handlers.py           # Telegram text, voice & document handlers
+│   │   └── handlers.py           # Telegram text, voice, document, & button handlers
 │   ├── ai/
-│   │   ├── engine.py             # Main AI orchestrator & onboarding
-│   │   ├── models.py             # Multi-model fallback chain & tool definitions
+│   │   ├── engine.py             # Main AI engine, onboarding router, & tool execution
+│   │   ├── models.py             # Multi-model fallback chain & tool schemas
 │   │   ├── memory.py             # Conversation history & context builder
-│   │   └── prompts.py            # Financial analyst system prompts
+│   │   └── prompts.py            # Financial analyst system prompts & onboarding state
+│   ├── integrations/
+│   │   ├── google_services.py    # Google OAuth 2.0 PKCE-free flow, Calendar, Gmail APIs
+│   │   └── google_auth_routes.py # FastAPI callback endpoint for Google OAuth
 │   ├── services/
-│   │   ├── market_data.py        # Stock prices, profiles, comparisons
+│   │   ├── market_data.py        # Stock quotes, company profiles, market overview
+│   │   ├── finnhub_extended.py   # SEC EDGAR, analyst ratings, insider transactions, calendars
 │   │   ├── news.py               # Financial news API integration
-│   │   ├── daily_briefing.py     # Personalised morning briefing generator
-│   │   └── document_analyzer.py  # PDF/DOCX parser & Voice Whisper transcriber
+│   │   ├── daily_briefing.py     # Personalized morning briefing generator
+│   │   └── document_analyzer.py  # PDF, DOCX, XLSX, CSV parser & Groq Whisper transcriber
 │   ├── database/
-│   │   ├── connection.py         # Async SQLite engine
-│   │   ├── models.py             # User, Conversation, Alert, Document ORM
+│   │   ├── connection.py         # Async SQLite / PostgreSQL engine
+│   │   ├── models.py             # User, Alert, Document ORM schemas
 │   │   └── repositories.py       # Data access layer
 │   └── scheduler/
-│       └── jobs.py               # APScheduler background jobs
+│       └── jobs.py               # APScheduler background jobs & 4-min self-ping keep-alive
 ```
 
 ---
@@ -119,8 +142,8 @@ atlas-financial-assistant/
 
 1. **Clone the repository**:
    ```bash
-   git clone <repo-url>
-   cd atlas-financial-assistant
+   git clone https://github.com/MohitJain2003/atlas-ai-financial-assistant.git
+   cd atlas-ai-financial-assistant
    ```
 
 2. **Create and activate a virtual environment**:
@@ -138,18 +161,18 @@ atlas-financial-assistant/
    ```
 
 4. **Configure Environment Variables**:
-   Copy `.env.example` to `.env` and fill in your keys:
+   Create a `.env` file from `.env.example` and set your credentials:
    ```env
-   TELEGRAM_BOT_TOKEN=8798953054:AAEaJbmcvCT1wxrwRQDFl3zD5MS-2-7u0i4
-   GEMINI_API_KEY=your_gemini_key
+   TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+   FINNHUB_API_KEY=your_finnhub_key
    GROQ_API_KEY=your_groq_key
-   OPENROUTER_API_KEY=your_openrouter_key
-   MISTRAL_API_KEY=your_mistral_key
-   SAMBANOVA_API_KEY=your_sambanova_key
-   CEREBRAS_API_KEY=your_cerebras_key
+   GEMINI_API_KEY=your_gemini_key
+   GOOGLE_CLIENT_ID=your_google_client_id
+   GOOGLE_CLIENT_SECRET=your_google_client_secret
+   GOOGLE_REDIRECT_URI=https://atlas-ai-financial-assistant-f2m5.onrender.com/auth/google/callback
    ```
 
-5. **Run the Application**:
+5. **Run the Application Locally**:
    ```bash
    python main.py
    ```
