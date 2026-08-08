@@ -494,11 +494,17 @@ class AIEngine:
 
             # Also check for direct tickers (e.g. AAPL, TSLA, PLTR, NVDA, MSFT)
             if not ticker_to_fetch:
-                words = re.findall(r'\b([A-Za-z]{2,5})\b', message)
-                ignore = {"WHAT", "WHATS", "STOCK", "PRICE", "HOW", "MUCH", "SHOW", "TELL", "SHARE", "ABOUT", "GIVE", "TODAY", "YOUR", "THIS"}
+                common_english = {
+                    "WHAT", "WHATS", "STOCK", "PRICE", "HOW", "MUCH", "SHOW", "TELL", "SHARE", "ABOUT", "GIVE", "TODAY", "YOUR", "THIS",
+                    "ON", "MY", "IS", "IN", "IT", "AT", "TO", "FOR", "OF", "ME", "WE", "DO", "NO", "SO", "IF", "OR", "AN", "AM", "AS", "BY",
+                    "GO", "UP", "HE", "BE", "US", "THE", "CAN", "ALL", "NEW", "GET", "HAS", "HAD", "YOU", "SEE", "ARE", "AND", "NOT", "BUT",
+                    "HAVE", "WITH", "THAT", "THIS", "FROM", "THEY", "WILL", "WOULD", "THERE", "THEIR", "WHICH", "WHEN", "WHERE", "MORE",
+                    "DAYS", "WEEK", "NEXT", "TODAY", "TIME", "MEETINGS", "CALENDAR", "EMAILS", "GMAIL"
+                }
+                words = re.findall(r'\b([A-Z]{2,5})\b', message)
                 for w in words:
-                    if w.upper() not in ignore:
-                        ticker_to_fetch = w.upper()
+                    if w not in common_english:
+                        ticker_to_fetch = w
                         break
 
             if ticker_to_fetch:
