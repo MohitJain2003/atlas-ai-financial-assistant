@@ -304,16 +304,14 @@ async def check_event_reminders():
 
 
 async def self_ping_keepalive():
-    """Ping our own /health endpoint every 10 min to prevent Render free tier spin-down."""
-    service_url = os.getenv("RENDER_EXTERNAL_URL", "")
-    if not service_url:
-        return  # Not on Render, skip
+    """Ping our own /health endpoint every 4 min to permanently prevent Render free tier spin-down."""
+    service_url = os.getenv("RENDER_EXTERNAL_URL", "https://atlas-ai-financial-assistant-f2m5.onrender.com")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(f"{service_url}/health")
-            logger.debug(f"Keep-alive ping: {resp.status_code}")
+            resp = await client.get(f"{service_url.rstrip('/')}/health")
+            logger.info(f"⚡ Keep-alive ping to {service_url}/health: HTTP {resp.status_code}")
     except Exception as e:
-        logger.debug(f"Keep-alive ping failed (non-critical): {e}")
+        logger.warning(f"Keep-alive ping error: {e}")
 
 
 def start_scheduler():
@@ -339,12 +337,12 @@ def start_scheduler():
     # Event reminders (user-set: "remind me 1hr before Apple earnings") — every 5 minutes
     scheduler.add_job(check_event_reminders, "interval", minutes=5, id="event_reminders", replace_existing=True)
 
-    # Self-ping keep-alive — every 10 minutes (backup for UptimeRobot on Render)
-    scheduler.add_job(self_ping_keepalive, "interval", minutes=10, id="self_ping", replace_existing=True)
+    # Self-ping keep-alive — every 4 minutes to keep Render web container active 24/7
+    scheduler.add_job(self_ping_keepalive, "interval", minutes=4, id="self_ping", replace_existing=True)
 
     scheduler.start()
     logger.info(
         "⏱️ Scheduler started: Morning Briefings + Evening Summaries + "
         "Price Alerts (15min) + News Monitor (2hr) + Earnings Reminders (7AM) + "
-        "Event Reminders (5min) + Self-Ping Keep-Alive (10min)"
+        "Event Reminders (5min) + Self-Ping Keep-Alive (4min ⚡)"
     )
