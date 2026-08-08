@@ -79,7 +79,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "build": "v4.4-keepalive-24-7"}
+    return {"status": "healthy", "build": "v4.5-question-line-gap"}
 
 
 @app.get("/debug/price/{ticker}")
