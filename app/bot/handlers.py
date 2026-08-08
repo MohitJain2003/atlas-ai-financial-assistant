@@ -57,6 +57,8 @@ async def _send(context, chat_id: int, text: str):
     auth_match = re.search(r'\[AUTH_LINK:(https?://[^\s\]]+)\]', text) or re.search(r'(https?://[^\s\)]+/auth/google\?telegram_id=\d+)', text)
     if auth_match:
         auth_url = auth_match.group(1)
+        if "f2m.onrender.com" in auth_url:
+            auth_url = auth_url.replace("f2m.onrender.com", "f2m5.onrender.com")
         keyboard = [[InlineKeyboardButton("🔑 Connect to Google", url=auth_url)]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         # Strip out raw URL placeholder or link strings from body text
