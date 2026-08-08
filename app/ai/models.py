@@ -198,15 +198,41 @@ FINANCIAL_TOOLS = [
                         "description": "Type of alert: 'price_above', 'price_below', or 'percent_change'"
                     },
                     "condition_value": {
-                        "type": "string",
-                        "description": "The price target or percentage threshold (as a number, e.g. '200' for $200, '5' for 5%)"
-                    },
                     "description": {
                         "type": "string",
                         "description": "Human readable description of the alert"
                     }
                 },
                 "required": ["ticker", "alert_type", "condition_value"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_to_watchlist",
+            "description": "Add a stock ticker symbol to the user's saved watchlist. Use when user says 'add NVDA to my watchlist', 'track TSLA', 'follow AAPL'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ticker": {
+                        "type": "string",
+                        "description": "Stock ticker symbol to add (e.g. NVDA, TSLA, AAPL)"
+                    }
+                },
+                "required": ["ticker"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_watchlist",
+            "description": "Get the user's current saved stock watchlist with live prices. Use when user says 'show my watchlist', 'what am I tracking', 'my watchlist', 'view my watchlist'.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
             }
         }
     },

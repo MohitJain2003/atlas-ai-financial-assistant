@@ -39,9 +39,12 @@ async def _send(context, chat_id: int, text: str):
     # Remove markdown headers (# Title → Title)
     text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
 
-    # Strip LLM web grounding citation numbers (e.g. now239 → now, account2 → account, messages.19 → messages.)
+    # Strip LLM web grounding citation numbers (e.g. now239 → now, account2 → account)
     text = re.sub(r'\[\d+\]', '', text)
-    text = re.sub(r'(?<=[a-zA-Z\.])\d{1,4}\b', '', text)
+    text = re.sub(r'(?<=[a-zA-Z])\d{1,4}\b', '', text)
+    # Clean trailing dot artifacts (e.g. $354. -> $354, -0.% -> -0%)
+    text = re.sub(r'(\$\d+)\.\b', r'\1', text)
+    text = re.sub(r'(\d+)\.%(?=\s|\b)', r'\1%', text)
 
     # Ensure concluding follow-up questions always have a blank line gap before them for easy readability
     text = re.sub(

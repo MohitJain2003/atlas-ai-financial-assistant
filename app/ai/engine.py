@@ -97,9 +97,37 @@ async def handle_tool_call(tool_name: str, tool_args: dict, user: User = None) -
                 )
                 return {
                     "status": "created",
-                    "message": f"✅ Alert set for {tool_args.get('ticker')} — {tool_args.get('alert_type')} {tool_args.get('condition_value')}",
+                    "message": f"✅ Alert set for {tool_args.get('ticker')} — {tool_args.get('alert_type')} ${tool_args.get('condition_value')}",
                 }
             return {"error": "User context required to create alert."}
+
+        elif tool_name == "add_to_watchlist":
+            if user:
+                ticker = tool_args.get("ticker", "").upper().strip()
+                if ticker:
+                    wl = user.watchlist or []
+                    if ticker not in wl:
+                        wl.append(ticker)
+                        await UserRepository.update_user(user.telegram_id, watchlist=wl)
+                        user.watchlist = wl
+                    return {"status": "success", "message": f"✅ Added {ticker} to your watchlist.", "watchlist": user.watchlist}
+            return {"error": "User context required to update watchlist."}
+
+        elif tool_name == "get_watchlist":
+            if user:
+                wl = user.watchlist or []
+                if not wl:
+                    return {"watchlist": [], "message": "Your watchlist is empty. Ask me to add tickers like 'Add NVDA to my watchlist'."}
+                quotes = []
+                for ticker in wl:
+                    try:
+                        q = await market_service.get_stock_price(ticker)
+                        if "error" not in q:
+                            quotes.append(f"{ticker}: ${q.get('price')} ({q.get('percent_change')}%)")
+                    except Exception:
+                        pass
+                return {"watchlist": wl, "live_quotes": quotes}
+            return {"error": "User context required to get watchlist."}
 
         # --- Extended Finnhub Tools ---
         elif tool_name == "get_analyst_ratings":
