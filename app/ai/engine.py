@@ -229,10 +229,9 @@ class AIEngine:
             )
 
         if not user.is_onboarded:
-            # If user asks a real financial/market question during onboarding,
+            # If user asks a real financial/market question OR Google query during onboarding,
             # complete onboarding silently and answer their question directly.
             # Don't make them wait — feel like an analyst, not a form.
-            # Use word-boundary matching to avoid "investor" matching "invest"
             financial_patterns = [
                 r"\bprice\b", r"\bstock\b", r"\bmarket\b", r"\bshare\b",
                 r"\bcrypto\b", r"\bbitcoin\b", r"\bportfolio\b", r"\brevenue\b",
@@ -243,13 +242,15 @@ class AIEngine:
                 r"\bsec\b", r"what'?s\s+\w+\s+stock", r"how is the market",
                 r"tell me about \w+", r"show me \w+", r"\btrading at\b",
                 r"\bmarket cap\b", r"\bpe ratio\b", r"\bshare price\b",
+                r"\bcalendar\b", r"\bmeeting\b", r"\bschedule\b", r"\bevent\b",
+                r"\bgmail\b", r"\bemail\b", r"\bsheet\b", r"\bspreadsheet\b",
             ]
-            is_financial_query = any(
+            is_financial_query = bool(user.google_tokens) or any(
                 re.search(p, msg_lower) for p in financial_patterns
             )
 
-            if is_financial_query and user.onboarding_step not in ("welcome", None):
-                # Silently mark onboarding complete and answer the question
+            if is_financial_query:
+                # Silently mark onboarding complete and answer the question directly
                 await UserRepository.update_user(
                     user.telegram_id, is_onboarded=True, onboarding_step="complete"
                 )
@@ -440,7 +441,7 @@ class AIEngine:
         # Pre-fetch live market data for price/comparison/market queries
         # Injected directly into user_message so ALL models (Gemini, Groq, SambaNova, etc.)
         # get real-time Finnhub/Alpha Vantage data even if function calling fails/rate-limits.
-        pre_fetched = await self._pre_fetch_market_data(message)
+        pre_fetched = await self._pre_fetch_market_data(message, user=user)
 
         system_prompt = SYSTEM_PROMPT.format(
             user_context=user_context,
@@ -533,8 +534,8 @@ class AIEngine:
         await self._check_for_watchlist_updates(user, message)
         return response
 
-    async def _pre_fetch_market_data(self, message: str) -> str:
-        """Pre-fetch live data for price/market queries so AI always has real numbers."""
+    async def _pre_fetch_market_data(self, message: str, user: User = None) -> str:
+        """Pre-fetch live data for price/market/google queries so AI always has real numbers."""
         msg_lower = message.lower()
         results = []
         market_service, news_service, _, _, _, _ = _get_services()
@@ -626,6 +627,32 @@ class AIEngine:
                             fetched_tickers.add(ticker)
                     except Exception:
                         pass
+
+        # Pre-fetch Google Calendar / Gmail data if user has connected tokens
+        if user and user.google_tokens:
+            cal_kws = ["calendar", "schedule", "meeting", "event", "appointment", "calender"]
+            if any(kw in msg_lower for kw in cal_kws):
+                try:
+                    from app.integrations.google_services import GoogleCalendarService
+                    events = GoogleCalendarService().get_upcoming_events(user.google_tokens, days=7)
+                    if events:
+                        ev_str = "; ".join(f"{e.get('summary')} ({e.get('start')})" for e in events)
+                        results.append(f"Google Calendar Events (Next 7 days): {ev_str}")
+                    else:
+                        results.append("Google Calendar Status: Connected. No upcoming events found for the next 7 days.")
+                except Exception as e:
+                    logger.error(f"Error pre-fetching Google Calendar: {e}")
+
+            gmail_kws = ["email", "gmail", "inbox", "mail"]
+            if any(kw in msg_lower for kw in gmail_kws):
+                try:
+                    from app.integrations.google_services import GmailService
+                    emails = GmailService().search_emails(user.google_tokens, query="meeting OR stock OR earnings OR alert", max_results=5)
+                    if emails:
+                        em_str = "; ".join(f"From: {m.get('from')} | Subject: {m.get('subject')} | Snippet: {m.get('snippet')}" for m in emails)
+                        results.append(f"Gmail Search Results: {em_str}")
+                except Exception as e:
+                    logger.error(f"Error pre-fetching Gmail: {e}")
 
         return "\n".join(results) if results else ""
 
