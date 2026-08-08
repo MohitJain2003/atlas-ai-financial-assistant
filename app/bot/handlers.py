@@ -39,6 +39,10 @@ async def _send(context, chat_id: int, text: str):
     # Remove markdown headers (# Title → Title)
     text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
 
+    # Strip LLM web grounding citation numbers (e.g. now239 → now, account2 → account, messages.19 → messages.)
+    text = re.sub(r'\[\d+\]', '', text)
+    text = re.sub(r'(?<=[a-zA-Z\.])\d{1,4}\b', '', text)
+
     # Ensure concluding follow-up questions always have a blank line gap before them for easy readability
     text = re.sub(
         r'([\.!\)])\s+((?:Would you|Do you|Should I|Want me|Shall we|Let me|How would|What else|Is there|Can I|Shall I)\b[^\n]*\?)',
