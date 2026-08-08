@@ -264,12 +264,14 @@ class AIEngine:
         return response
 
     async def _handle_onboarding(self, user: User, message: str) -> str:
-        """Drive conversational onboarding — one step at a time."""
+        """Drive conversational onboarding — advance state first, then generate next step prompt."""
+        next_step = await self._process_onboarding_step(user, message)
+
         history = await self.memory.get_context(user.telegram_id, limit=10)
-        pre_fetched = await self._pre_fetch_market_data(message)
+        pre_fetched = await self._pre_fetch_market_data(message, user=user)
 
         prompt = ONBOARDING_PROMPT.format(
-            onboarding_step=user.onboarding_step,
+            onboarding_step=next_step,
             user_name=user.first_name or "there",
             previous_messages=history,
             user_message=message,
@@ -287,15 +289,15 @@ class AIEngine:
             return await handle_tool_call(tool_name, tool_args, user=user)
 
         response = await model_chain.generate(prompt, user_msg, tool_handler=_tool_handler)
-        await self._process_onboarding_step(user, message)
         return response
 
-    async def _process_onboarding_step(self, user: User, message: str):
-        """Parse user message and advance onboarding state machine."""
-        step = user.onboarding_step
+    async def _process_onboarding_step(self, user: User, message: str) -> str:
+        """Parse user message, advance onboarding state machine, and return next_step."""
+        step = user.onboarding_step or "welcome"
         msg_lower = message.lower().strip()
         is_skip = msg_lower in ("skip", "skip this", "next", "pass", "no", "nope")
 
+        next_step = "role"
         if step == "welcome":
             if not is_skip:
                 roles = {
@@ -303,89 +305,56 @@ class AIEngine:
                     "analyst": "Analyst", "analysis": "Analyst",
                     "founder": "Founder", "startup": "Founder",
                     "student": "Student", "learning": "Student",
-                    "professional": "Finance Professional",
                     "trader": "Trader", "trading": "Trader",
-                    "portfolio manager": "Portfolio Manager", "portfolio": "Portfolio Manager",
-                    "researcher": "Research Analyst", "research": "Research Analyst",
-                    "banker": "Investment Banker", "banking": "Investment Banker",
-                    "cfo": "CFO", "ceo": "CEO", "vc": "Venture Capitalist", "venture": "Venture Capitalist",
                 }
                 for keyword, role in roles.items():
                     if keyword in msg_lower:
                         await UserRepository.update_user(user.telegram_id, role=role)
                         break
+            next_step = "role"
             await UserRepository.update_user(user.telegram_id, onboarding_step="role")
 
         elif step == "role":
             if not is_skip:
-                sector_kws = [
-                    "technology", "tech", "healthcare", "finance", "fintech", "energy",
-                    "ai", "artificial intelligence", "semiconductor", "crypto", "cryptocurrency",
-                    "blockchain", "banking", "real estate", "pharma", "pharmaceutical",
-                    "ev", "electric vehicle", "automotive", "retail", "cloud", "saas",
-                    "biotech", "aerospace", "defense", "consumer", "media", "telecom",
-                    "commodities", "industrials", "utilities", "materials",
-                ]
+                sector_kws = ["tech", "technology", "finance", "crypto", "healthcare", "energy", "ev", "banking", "ai"]
                 found = list(set([s.title() for s in sector_kws if s in msg_lower]))
                 if found:
                     await UserRepository.update_user(user.telegram_id, sectors=found)
+            next_step = "interests"
             await UserRepository.update_user(user.telegram_id, onboarding_step="interests")
 
         elif step == "interests":
             if not is_skip:
                 tickers = re.findall(r'\b[A-Z]{1,5}\b', message)
-                company_map = {
-                    "apple": "AAPL", "microsoft": "MSFT", "google": "GOOGL",
-                    "alphabet": "GOOGL", "amazon": "AMZN", "tesla": "TSLA",
-                    "nvidia": "NVDA", "meta": "META", "netflix": "NFLX",
-                    "disney": "DIS", "intel": "INTC", "amd": "AMD",
-                    "spotify": "SPOT", "uber": "UBER", "airbnb": "ABNB",
-                    "palantir": "PLTR", "snowflake": "SNOW", "datadog": "DDOG",
-                    "shopify": "SHOP", "coinbase": "COIN", "robinhood": "HOOD",
-                    "jpmorgan": "JPM", "goldman": "GS", "berkshire": "BRK-B",
-                }
+                company_map = {"apple": "AAPL", "microsoft": "MSFT", "google": "GOOGL", "tesla": "TSLA", "nvidia": "NVDA", "meta": "META"}
                 for name, ticker in company_map.items():
                     if name in msg_lower and ticker not in tickers:
                         tickers.append(ticker)
                 if tickers:
                     await UserRepository.update_user(user.telegram_id, watchlist=list(set(tickers)))
+            next_step = "watchlist"
             await UserRepository.update_user(user.telegram_id, onboarding_step="watchlist")
 
         elif step == "watchlist":
             if not is_skip:
-                interest_map = {
-                    "news": "Market News", "earnings": "Earnings", "sec": "SEC Filings",
-                    "filing": "SEC Filings", "analyst": "Analyst Ratings",
-                    "macro": "Macroeconomic Events", "economic": "Macroeconomic Events",
-                    "ipo": "IPOs", "dividend": "Dividends", "merger": "M&A",
-                    "acquisition": "M&A", "crypto": "Cryptocurrency",
-                    "technical": "Technical Analysis", "insider": "Insider Transactions",
-                }
-                interests = list(set([
-                    label for kw, label in interest_map.items() if kw in msg_lower
-                ]))
-                if interests:
-                    await UserRepository.update_user(user.telegram_id, interests=interests)
-            await UserRepository.update_user(user.telegram_id, onboarding_step="briefing")
-
-        elif step == "briefing":
-            if not is_skip:
-                time_match = re.search(r'(\d{1,2})[:\.]?(\d{2})?\s*(am|pm|AM|PM)?', message)
+                time_match = re.search(r'(\d{1,2})\s*(am|pm|AM|PM)?', message)
                 if time_match:
                     hour = int(time_match.group(1))
-                    minute = int(time_match.group(2) or 0)
-                    ampm = (time_match.group(3) or "").lower()
+                    ampm = (time_match.group(2) or "").lower()
                     if ampm == "pm" and hour < 12:
                         hour += 12
                     elif ampm == "am" and hour == 12:
                         hour = 0
-                    await UserRepository.update_user(
-                        user.telegram_id,
-                        briefing_time=f"{hour:02d}:{minute:02d}"
-                    )
-            await UserRepository.update_user(
-                user.telegram_id, onboarding_step="complete", is_onboarded=True
-            )
+                    await UserRepository.update_user(user.telegram_id, briefing_time=f"{hour:02d}:00")
+            next_step = "briefing"
+            await UserRepository.update_user(user.telegram_id, onboarding_step="briefing")
+
+        elif step == "briefing":
+            next_step = "complete"
+            await UserRepository.update_user(user.telegram_id, onboarding_step="complete", is_onboarded=True)
+            user.is_onboarded = True
+
+        return next_step
 
     async def _handle_conversation(self, user: User, message: str) -> str:
         """Handle a regular conversation with full tools, memory, and personalization."""
