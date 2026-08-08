@@ -198,6 +198,9 @@ FINANCIAL_TOOLS = [
                         "description": "Type of alert: 'price_above', 'price_below', or 'percent_change'"
                     },
                     "condition_value": {
+                        "type": "string",
+                        "description": "The price target or percentage threshold (as a number, e.g. '200' for $200, '5' for 5%)"
+                    },
                     "description": {
                         "type": "string",
                         "description": "Human readable description of the alert"
