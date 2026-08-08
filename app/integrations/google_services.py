@@ -26,10 +26,9 @@ os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 def get_redirect_uri() -> str:
     """Dynamically get the authoritative redirect URI for Google OAuth."""
     env_uri = os.getenv("GOOGLE_REDIRECT_URI")
-    if env_uri and "localhost" not in env_uri:
+    if env_uri and "f2m5" in env_uri:
         return env_uri
-    base_url = os.getenv("RENDER_EXTERNAL_URL", "https://atlas-ai-financial-assistant-f2m5.onrender.com")
-    return f"{base_url}/auth/google/callback"
+    return "https://atlas-ai-financial-assistant-f2m5.onrender.com/auth/google/callback"
 
 
 def get_google_credentials():

@@ -209,7 +209,7 @@ class AIEngine:
                     "2. Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to your environment variables\n"
                     "3. Set redirect URI to: `https://atlas-ai-financial-assistant-f2m5.onrender.com/auth/google/callback`"
                 )
-            base_url = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
+            base_url = "https://atlas-ai-financial-assistant-f2m5.onrender.com"
             auth_link = f"{base_url}/auth/google?telegram_id={user.telegram_id}"
             return (
                 f"🔗 *Connect Google Account*\n\n"
@@ -220,7 +220,7 @@ class AIEngine:
         # Global intercept: Calendar/Gmail queries when not connected
         google_query_kws = ["my calendar", "my schedule", "my meetings", "search my email", "my gmail", "my spreadsheet", "my google sheet", "calender"]
         if not is_system_msg and any(kw in msg_lower for kw in google_query_kws) and not user.google_tokens:
-            base_url = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
+            base_url = "https://atlas-ai-financial-assistant-f2m5.onrender.com"
             auth_link = f"{base_url}/auth/google?telegram_id={user.telegram_id}"
             return (
                 f"📅 *Google Account Not Connected*\n\n"
