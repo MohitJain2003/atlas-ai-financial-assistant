@@ -116,9 +116,9 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"[SYSTEM: New user {name} sent /start. Greet them warmly as {name}! "
                 f"Introduce yourself as Atlas — their AI financial analyst on Telegram. "
                 f"Format your response into 3 distinct sections separated by blank line gaps:\n"
-                f"1. Warm intro + bulleted capabilities (Live market quotes, Earnings & SEC filings, Price alerts & Daily briefs, Voice notes & PDF document Q&A — no slash commands needed).\n"
+                f"1. Warm intro + bulleted capabilities starting each capability point with a bullet symbol '• ' (• Live market quotes, • Earnings & SEC filings, • Price alerts & Daily briefs, • Voice notes & PDF document Q&A — no slash commands needed).\n"
                 f"2. Separate line after a blank line gap: '💡 To sync your Google Calendar, Gmail, and Sheets, just say **connect google** anytime!'\n"
-                f"3. Separate line after a blank line gap: 'What best describes your primary role (Investor, Analyst, Founder, Trader, Student), or what stocks/markets are you watching today?']"
+                f"3. Separate line after a blank line gap: 'What best describes your primary role (Investor, Analyst, Founder, Trader, Student), or what stocks/markets are you watching today (e.g., tech, finance, crypto, EV)?']"
             )
             response = await ai_engine.process_message(user, welcome_text)
 
