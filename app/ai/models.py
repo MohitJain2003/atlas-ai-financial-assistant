@@ -537,7 +537,7 @@ class AIModelChain:
                                 tool_handler=None) -> str:
         """Generate response using Google Gemini."""
         model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
+            model_name="gemini-2.5-flash-lite",
             system_instruction=system_prompt,
             tools=GEMINI_TOOLS if tool_handler else None,
         )
