@@ -304,6 +304,19 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in photo_handler: {e}", exc_info=True)
 
 
+async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log uncaught errors and send friendly message to user if update exists."""
+    logger.error(f"Uncaught Telegram Error: {context.error}", exc_info=context.error)
+    if isinstance(update, Update) and update.effective_chat:
+        try:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="I encountered a brief glitch processing that request. Please try again! 🔄"
+            )
+        except Exception:
+            pass
+
+
 def register_handlers(app: Application):
     """Register all message handlers with the Telegram application."""
     app.add_handler(CommandHandler("start", start_handler))
@@ -312,11 +325,24 @@ def register_handlers(app: Application):
     app.add_handler(MessageHandler(filters.VOICE, voice_handler))
     app.add_handler(MessageHandler(filters.Document.ALL, document_handler))
     app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
-    logger.info("✅ All Telegram handlers registered")
+    app.add_error_handler(global_error_handler)
+    logger.info("✅ All Telegram handlers & error handler registered")
 
 
 def create_bot_app() -> Application:
-    """Build and return the Telegram Application with all handlers registered."""
-    app = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
+    """Build and return the Telegram Application with robust HTTP timeouts & error handlers."""
+    from telegram.request import HTTPXRequest
+    request_obj = HTTPXRequest(
+        connect_timeout=20.0,
+        read_timeout=20.0,
+        write_timeout=20.0,
+        pool_timeout=20.0,
+    )
+    app = (
+        Application.builder()
+        .token(settings.TELEGRAM_BOT_TOKEN)
+        .request(request_obj)
+        .build()
+    )
     register_handlers(app)
     return app

@@ -30,7 +30,11 @@ async def lifespan(app: FastAPI):
         bot_app = create_bot_app()
         await bot_app.initialize()
         await bot_app.start()
-        await bot_app.updater.start_polling()
+        from telegram import Update
+        await bot_app.updater.start_polling(
+            drop_pending_updates=True,
+            allowed_updates=Update.ALL_TYPES,
+        )
 
         from app.scheduler.jobs import start_scheduler
         start_scheduler()
@@ -75,7 +79,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "build": "v4.2-fixed-pkce-oauth"}
+    return {"status": "healthy", "build": "v4.3-fix-polling-resilience"}
 
 
 @app.get("/debug/price/{ticker}")
