@@ -258,11 +258,21 @@ async def document_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_path = os.path.join(UPLOAD_DIR, f"doc_{update.message.message_id}_{file_name}")
         await doc_file.download_to_drive(file_path)
 
-        analyzer = DocumentAnalyzerService()
-        analysis = await analyzer.analyze_document(file_path, file_name)
+        # Extract text/spreadsheet contents from uploaded file
+        extracted_text = await DocumentAnalyzerService.extract_text(file_path, file_ext)
 
         if os.path.exists(file_path):
-            os.remove(file_path)
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+
+        if not extracted_text:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"I couldn't extract readable text from *{file_name}*. Please ensure the file is not empty or password protected."
+            )
+            return
 
         user = await UserRepository.get_or_create_user(
             telegram_id=tg_user.id,
@@ -275,8 +285,8 @@ async def document_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         caption = update.message.caption or ""
         prompt = (
             f"The user uploaded a document: '{file_name}'\n\n"
-            f"Extracted content:\n{analysis.get('text', '')[:3000]}\n\n"
-            f"User's question/note: {caption or 'Please analyze and give key financial insights.'}"
+            f"Extracted content from document:\n{extracted_text[:4000]}\n\n"
+            f"User's question/note: {caption or 'Please analyze this document and summarize key financial insights.'}"
         )
 
         response = await ai_engine.process_message(user, prompt, message_type="document")
