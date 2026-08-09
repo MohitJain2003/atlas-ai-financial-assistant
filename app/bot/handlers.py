@@ -42,9 +42,10 @@ async def _send(context, chat_id: int, text: str):
     # Strip LLM web grounding citation numbers (e.g. now239 → now, account2 → account)
     text = re.sub(r'\[\d+\]', '', text)
     text = re.sub(r'(?<=[a-zA-Z])\d{1,4}\b', '', text)
-    # Clean trailing dot artifacts (e.g. $354. -> $354, -0.% -> -0%)
-    text = re.sub(r'(\$\d+)\.\b', r'\1', text)
-    text = re.sub(r'(\d+)\.%(?=\s|\b)', r'\1%', text)
+    # Clean trailing dot artifacts at sentence ends using \g<1> (e.g. $354. -> $354, 0.% -> 0%)
+    # Preserves decimal prices like $313.33, $0.92, $311.45
+    text = re.sub(r'(\$\d+)\.(?=\s|[,\!\?\)]|$)', r'\g<1>', text)
+    text = re.sub(r'(\d+)\.%(?=\s|[,\!\?\)]|$)', r'\g<1>%', text)
 
     # Ensure concluding follow-up questions always have a blank line gap before them for easy readability
     text = re.sub(
