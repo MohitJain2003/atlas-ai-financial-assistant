@@ -32,6 +32,33 @@ class DocumentAnalyzerService:
                 doc = docx.Document(file_path)
                 return "\n".join([p.text for p in doc.paragraphs if p.text]).strip()
 
+            elif file_type in ("xlsx", "xls"):
+                import openpyxl
+                wb = openpyxl.load_workbook(file_path, data_only=True)
+                lines = []
+                for sheetname in wb.sheetnames:
+                    sheet = wb[sheetname]
+                    lines.append(f"--- Sheet: {sheetname} ---")
+                    for row in sheet.iter_rows(values_only=True):
+                        if any(row):
+                            row_vals = [str(cell) if cell is not None else "" for cell in row]
+                            lines.append(" | ".join(row_vals))
+                return "\n".join(lines).strip()
+
+            elif file_type == "csv":
+                import csv
+                lines = []
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    reader = csv.reader(f)
+                    for row in reader:
+                        if any(row):
+                            lines.append(" | ".join(row))
+                return "\n".join(lines).strip()
+
+            elif file_type == "txt":
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    return f.read().strip()
+
         except Exception as e:
             logger.error(f"Error extracting text from {file_path}: {e}")
 
